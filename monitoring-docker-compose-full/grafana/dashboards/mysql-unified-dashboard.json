@@ -1,0 +1,177 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "MySQL Unified Monitoring - All Modes",
+    "tags": ["mysql", "unified", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "mysql_mode",
+          "type": "query",
+          "query": "label_values(mysql_up, mysql_mode)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(mysql_up{mysql_mode=~\"$mysql_mode\"}, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "MySQL Instances Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "mysql_up{mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mysql_mode}}/{{mysql_role}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mysql_global_status_threads_connected{mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mysql_mode}}) - Connected",
+            "refId": "A"
+          },
+          {
+            "expr": "mysql_global_variables_max_connections{mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mysql_mode}}) - Max",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 3,
+        "title": "Queries per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mysql_global_status_queries[5m]){mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mysql_mode}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yAxes": [{"unit": "qps"}]
+      },
+      {
+        "id": 4,
+        "title": "Slow Queries",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mysql_global_status_slow_queries[5m]){mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mysql_mode}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "InnoDB Buffer Pool Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mysql_global_status_innodb_buffer_pool_pages_data{mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"} * mysql_global_variables_innodb_page_size",
+            "legendFormat": "{{instance}} ({{mysql_mode}}) - Data",
+            "refId": "A"
+          },
+          {
+            "expr": "mysql_global_variables_innodb_buffer_pool_size{mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mysql_mode}}) - Total",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 6,
+        "title": "Replication Status (Master-Slave)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "mysql_slave_lag_seconds{mysql_role=\"slave\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "A"
+          },
+          {
+            "expr": "mysql_slave_sql_running{mysql_role=\"slave\", instance=~\"$instance\"}",
+            "format": "table", 
+            "refId": "B"
+          },
+          {
+            "expr": "mysql_slave_io_running{mysql_role=\"slave\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "Binary Log Position",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mysql_binlog_size_bytes{mysql_role=\"master\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} - Binlog Size",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 8,
+        "title": "Table Locks",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mysql_global_status_table_locks_immediate[5m]){mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} - Immediate",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(mysql_global_status_table_locks_waited[5m]){mysql_mode=~\"$mysql_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} - Waited",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      }
+    ]
+  }
+}

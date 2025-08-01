@@ -1,0 +1,412 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Spring Boot Applications Monitoring",
+    "tags": ["spring-boot", "actuator", "jvm", "microservices"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "application",
+          "type": "query",
+          "query": "label_values(jvm_info, application)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(jvm_info{application=~\"$application\"}, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Application Status Overview",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Applications Up/Down",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=~\"spring-boot.*|microservices\", application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 1},
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "JVM Memory Usage",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 7}
+      },
+      {
+        "id": 4,
+        "title": "JVM Heap Memory",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{area=\"heap\", application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Used",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_memory_max_bytes{area=\"heap\", application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Max",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 5,
+        "title": "JVM Non-Heap Memory",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{area=\"nonheap\", application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Used",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_memory_max_bytes{area=\"nonheap\", application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Max",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 6,
+        "title": "Memory Pool Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - {{id}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 7,
+        "title": "Garbage Collection",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24}
+      },
+      {
+        "id": 8,
+        "title": "GC Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(jvm_gc_collection_seconds_sum{application=~\"$application\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{application}} - {{gc}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
+        "yAxes": [{"unit": "s"}]
+      },
+      {
+        "id": 9,
+        "title": "GC Count",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(jvm_gc_collection_seconds_count{application=~\"$application\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{application}} - {{gc}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25},
+        "yAxes": [{"unit": "ops"}]
+      },
+      {
+        "id": 10,
+        "title": "HTTP Requests & Performance",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33}
+      },
+      {
+        "id": 11,
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_server_requests_total{application=~\"$application\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{application}} - {{method}} {{uri}} ({{status}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 34},
+        "yAxes": [{"unit": "rps"}]
+      },
+      {
+        "id": 12,
+        "title": "HTTP Response Time (95th percentile)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=~\"$application\", instance=~\"$instance\"}[5m]))",
+            "legendFormat": "{{application}} - {{method}} {{uri}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 34},
+        "yAxes": [{"unit": "s"}]
+      },
+      {
+        "id": 13,
+        "title": "HTTP Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_server_requests_total{status=~\"4..|5..\", application=~\"$application\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{application}} - {{method}} {{uri}} ({{status}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 42},
+        "yAxes": [{"unit": "rps"}]
+      },
+      {
+        "id": 14,
+        "title": "Thread Information",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 50}
+      },
+      {
+        "id": 15,
+        "title": "JVM Threads",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "jvm_threads_live_threads{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Live",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_threads_daemon_threads{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Daemon",
+            "refId": "B"
+          },
+          {
+            "expr": "jvm_threads_peak_threads{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Peak",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 51}
+      },
+      {
+        "id": 16,
+        "title": "Thread States",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "jvm_threads_states_threads{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - {{state}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 51}
+      },
+      {
+        "id": 17,
+        "title": "Tomcat Metrics",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 59}
+      },
+      {
+        "id": 18,
+        "title": "Tomcat Threads",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "tomcat_threads_busy_threads{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Busy",
+            "refId": "A"
+          },
+          {
+            "expr": "tomcat_threads_current_threads{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Current",
+            "refId": "B"
+          },
+          {
+            "expr": "tomcat_threads_config_max_threads{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Max",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 60}
+      },
+      {
+        "id": 19,
+        "title": "Tomcat Sessions",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "tomcat_sessions_active_current_sessions{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Active",
+            "refId": "A"
+          },
+          {
+            "expr": "tomcat_sessions_active_max_sessions{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Max",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 60}
+      },
+      {
+        "id": 20,
+        "title": "Database Connection Pool",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 68}
+      },
+      {
+        "id": 21,
+        "title": "HikariCP Connection Pool",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "hikaricp_connections_active{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Active",
+            "refId": "A"
+          },
+          {
+            "expr": "hikaricp_connections_idle{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Idle",
+            "refId": "B"
+          },
+          {
+            "expr": "hikaricp_connections_max{application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - Max",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 69}
+      },
+      {
+        "id": 22,
+        "title": "Database Connection Pool Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(hikaricp_connections_active{application=~\"$application\", instance=~\"$instance\"} / hikaricp_connections_max{application=~\"$application\", instance=~\"$instance\"}) * 100",
+            "legendFormat": "{{application}} - Usage %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 69},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 23,
+        "title": "Spring Boot Health Indicators",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "spring_boot_health_indicator_status{application=~\"$application\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 77}
+      },
+      {
+        "id": 24,
+        "title": "Resilience4j Circuit Breakers",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 85}
+      },
+      {
+        "id": 25,
+        "title": "Circuit Breaker States",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "resilience4j_circuitbreaker_state{application=~\"$application\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 86}
+      },
+      {
+        "id": 26,
+        "title": "Circuit Breaker Calls",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(resilience4j_circuitbreaker_calls_total{application=~\"$application\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{application}} - {{name}} ({{kind}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 86},
+        "yAxes": [{"unit": "rps"}]
+      },
+      {
+        "id": 27,
+        "title": "Custom Application Metrics",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 94}
+      },
+      {
+        "id": 28,
+        "title": "Application Custom Metrics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "{__name__=~\"application_.*\", application=~\"$application\", instance=~\"$instance\"}",
+            "legendFormat": "{{application}} - {{__name__}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 95}
+      }
+    ]
+  }
+}

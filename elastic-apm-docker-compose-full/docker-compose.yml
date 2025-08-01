@@ -1,0 +1,124 @@
+
+# ========================================================
+# Elastic APM Docker Compose - Complete Stack
+# ========================================================
+# 
+# This configuration provides a complete Elastic APM stack:
+# 
+# Services:
+#   - Elasticsearch: Data storage and search engine
+#   - Kibana: APM UI and visualization
+#   - APM Server: Application performance monitoring
+# 
+# Usage: docker-compose up -d
+# APM Server: http://localhost:8200
+# Kibana APM: http://localhost:5601/app/apm
+# Elasticsearch: http://localhost:9200
+# ========================================================
+
+
+networks:
+  apm-network:
+    driver: bridge
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elasticsearch-apm
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.monitoring.collection.enabled=true
+      - xpack.apm_data.enabled=true
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - cluster.name=apm-cluster
+      - node.name=elasticsearch
+      - indices.memory.index_buffer_size=256mb
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - apm-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: kibana-apm
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch-apm:9200
+      - SERVER_NAME=kibana
+      - SERVER_HOST=0.0.0.0
+      - XPACK_APM_ENABLED=true
+      - XPACK_FLEET_ENABLED=true
+    ports:
+      - "5601:5601"
+    networks:
+      - apm-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:8.13.4
+    container_name: apm-server-stack
+    ports:
+      - "8200:8200"
+    environment:
+      - apm-server.host=0.0.0.0:8200
+      - setup.kibana.host=kibana-apm:5601
+      - output.elasticsearch.hosts=["elasticsearch-apm:9200"]
+      - setup.template.enabled=true
+      - apm-server.auth.anonymous.enabled=true
+      - apm-server.auth.anonymous.allow_agent=["apm-js-base", "apm-agent-*"]
+      - apm-server.auth.anonymous.allow_service=["*"]
+      - apm-server.auth.anonymous.rate_limit.ip_limit=1000
+      - apm-server.auth.anonymous.rate_limit.event_limit=10000
+      - apm-server.capture_personal_data=false
+      - apm-server.max_event_size=307200
+      - setup.dashboards.enabled=true
+      - setup.dashboards.beat=apm-server
+      - logging.level=info
+      - logging.selectors=["*"]
+    command: >
+      apm-server -e
+    volumes:
+      - apm-data:/usr/share/apm-server/data
+      - ./apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
+    networks:
+      - apm-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kibana:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8200/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  es-data:
+  apm-data:

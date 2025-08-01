@@ -1,0 +1,182 @@
+# Profile-based Docker Compose for Selective Monitoring
+# This file demonstrates different deployment modes
+
+version: '3.8'
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+
+services:
+  # Core monitoring services (always deployed)
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - monitoring
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+  # System monitoring (basic profile)
+  node_exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: node_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    profiles:
+      - basic
+      - database
+      - messaging
+      - web
+      - search
+      - all
+
+  # Database monitoring profile
+  mysql_exporter:
+    image: prom/mysqld-exporter:v0.15.0
+    container_name: mysql_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9104:9104"
+    environment:
+      - DATA_SOURCE_NAME=root:password@(mysql:3306)/
+    profiles:
+      - database
+      - all
+
+  redis_exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    profiles:
+      - database
+      - all
+
+  mongodb_exporter:
+    image: bitnami/mongodb-exporter:0.40.0
+    container_name: mongodb_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9216:9216"
+    environment:
+      - MONGODB_URI=mongodb://root:password@mongo:27017/
+    profiles:
+      - database
+      - all
+
+  # Messaging profile
+  kafka_exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: kafka_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9308:9308"
+    command:
+      - '--kafka.server=kafka:9092'
+    profiles:
+      - messaging
+      - all
+
+  rabbitmq_exporter:
+    image: kbudde/rabbitmq-exporter:latest
+    container_name: rabbitmq_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9419:9419"
+    environment:
+      - RABBIT_URL=http://rabbitmq:15672
+      - RABBIT_USER=admin
+      - RABBIT_PASSWORD=admin
+    profiles:
+      - messaging
+      - all
+
+  # Web server profile
+  nginx_exporter:
+    image: nginx/nginx-prometheus-exporter:0.11.0
+    container_name: nginx_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9113:9113"
+    command:
+      - '-nginx.scrape-uri=http://nginx:80/nginx_status'
+    profiles:
+      - web
+      - all
+
+  # Search engine profile
+  elasticsearch_exporter:
+    image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.6.0
+    container_name: elasticsearch_exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9114:9114"
+    command:
+      - '--es.uri=http://elasticsearch:9200'
+    profiles:
+      - search
+      - all

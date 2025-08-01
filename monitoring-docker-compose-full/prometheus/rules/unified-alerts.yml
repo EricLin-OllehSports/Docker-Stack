@@ -1,0 +1,310 @@
+groups:
+  # =========================================
+  # SYSTEM ALERTS
+  # =========================================
+  - name: system-monitoring
+    rules:
+      - alert: HostDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: system
+        annotations:
+          summary: "Host {{ $labels.instance }} is down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 5 minutes."
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 80% on {{ $labels.instance }} for more than 5 minutes."
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% on {{ $labels.instance }} for more than 5 minutes."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          category: system
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk space is below 10% on {{ $labels.instance }}"
+
+  # =========================================
+  # REDIS ALERTS (All Modes)
+  # =========================================
+  - name: redis-monitoring
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: redis
+        annotations:
+          summary: "Redis instance down"
+          description: "Redis instance {{ $labels.instance }} ({{ $labels.redis_mode }}) is down"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: redis
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis {{ $labels.instance }} memory usage is above 80%"
+
+      - alert: RedisReplicationLag
+        expr: redis_replication_lag_seconds > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: redis
+        annotations:
+          summary: "Redis replication lag"
+          description: "Redis slave {{ $labels.instance }} is lagging behind master by {{ $value }} seconds"
+
+      - alert: RedisClusterDown
+        expr: redis_cluster_enabled == 1 and redis_cluster_slots_assigned < 16384
+        for: 2m
+        labels:
+          severity: critical
+          category: redis
+        annotations:
+          summary: "Redis cluster incomplete"
+          description: "Redis cluster has only {{ $value }} slots assigned out of 16384"
+
+  # =========================================
+  # MYSQL ALERTS (All Modes)
+  # =========================================
+  - name: mysql-monitoring
+    rules:
+      - alert: MySQLDown
+        expr: mysql_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: mysql
+        annotations:
+          summary: "MySQL instance down"
+          description: "MySQL instance {{ $labels.instance }} ({{ $labels.mysql_mode }}) is down"
+
+      - alert: MySQLReplicationLag
+        expr: mysql_slave_lag_seconds > 30
+        for: 2m
+        labels:
+          severity: warning
+          category: mysql
+        annotations:
+          summary: "MySQL replication lag"
+          description: "MySQL slave {{ $labels.instance }} is lagging behind by {{ $value }} seconds"
+
+      - alert: MySQLSlowQueries
+        expr: rate(mysql_global_status_slow_queries[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: mysql
+        annotations:
+          summary: "MySQL slow queries increasing"
+          description: "MySQL {{ $labels.instance }} has {{ $value }} slow queries per second"
+
+      - alert: MySQLConnectionsHigh
+        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: mysql
+        annotations:
+          summary: "MySQL high connections"
+          description: "MySQL {{ $labels.instance }} is using {{ $value }}% of max connections"
+
+  # =========================================
+  # MONGODB ALERTS (All Modes)
+  # =========================================
+  - name: mongodb-monitoring
+    rules:
+      - alert: MongoDBDown
+        expr: mongodb_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: mongodb
+        annotations:
+          summary: "MongoDB instance down"
+          description: "MongoDB instance {{ $labels.instance }} ({{ $labels.mongodb_mode }}) is down"
+
+      - alert: MongoDBReplicationLag
+        expr: mongodb_mongod_replset_member_replication_lag > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: mongodb
+        annotations:
+          summary: "MongoDB replication lag"
+          description: "MongoDB member {{ $labels.instance }} is lagging behind by {{ $value }} seconds"
+
+      - alert: MongoDBHighConnections
+        expr: mongodb_connections{state="current"} / mongodb_connections{state="available"} * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: mongodb
+        annotations:
+          summary: "MongoDB high connections"
+          description: "MongoDB {{ $labels.instance }} is using {{ $value }}% of available connections"
+
+  # =========================================
+  # KAFKA ALERTS
+  # =========================================
+  - name: kafka-monitoring
+    rules:
+      - alert: KafkaDown
+        expr: kafka_brokers == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: kafka
+        annotations:
+          summary: "Kafka cluster down"
+          description: "No Kafka brokers are available"
+
+      - alert: KafkaConsumerLag
+        expr: kafka_consumer_lag_sum > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: kafka
+        annotations:
+          summary: "Kafka consumer lag high"
+          description: "Kafka consumer group {{ $labels.consumergroup }} has lag of {{ $value }} messages"
+
+      - alert: KafkaUnderReplicatedPartitions
+        expr: kafka_topic_partition_under_replicated_partition > 0
+        for: 2m
+        labels:
+          severity: warning
+          category: kafka
+        annotations:
+          summary: "Kafka under-replicated partitions"
+          description: "Topic {{ $labels.topic }} has {{ $value }} under-replicated partitions"
+
+  # =========================================
+  # RABBITMQ ALERTS
+  # =========================================
+  - name: rabbitmq-monitoring
+    rules:
+      - alert: RabbitMQDown
+        expr: rabbitmq_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: rabbitmq
+        annotations:
+          summary: "RabbitMQ instance down"
+          description: "RabbitMQ instance {{ $labels.instance }} is down"
+
+      - alert: RabbitMQQueueMessages
+        expr: rabbitmq_queue_messages_unacked > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: rabbitmq
+        annotations:
+          summary: "RabbitMQ high unacked messages"
+          description: "Queue {{ $labels.queue }} has {{ $value }} unacked messages"
+
+      - alert: RabbitMQMemoryHigh
+        expr: rabbitmq_node_mem_used / rabbitmq_node_mem_limit * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: rabbitmq
+        annotations:
+          summary: "RabbitMQ high memory usage"
+          description: "RabbitMQ node {{ $labels.instance }} memory usage is {{ $value }}%"
+
+  # =========================================
+  # NGINX ALERTS
+  # =========================================
+  - name: nginx-monitoring
+    rules:
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: nginx
+        annotations:
+          summary: "Nginx instance down"
+          description: "Nginx instance {{ $labels.instance }} is down"
+
+      - alert: NginxHighRequestRate
+        expr: rate(nginx_http_requests_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: nginx
+        annotations:
+          summary: "Nginx high request rate"
+          description: "Nginx {{ $labels.instance }} has {{ $value }} requests per second"
+
+      - alert: NginxHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"4..|5.."}[5m]) / rate(nginx_http_requests_total[5m]) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: nginx
+        annotations:
+          summary: "Nginx high error rate"
+          description: "Nginx {{ $labels.instance }} error rate is {{ $value }}%"
+
+  # =========================================
+  # ELASTICSEARCH ALERTS
+  # =========================================
+  - name: elasticsearch-monitoring
+    rules:
+      - alert: ElasticsearchDown
+        expr: elasticsearch_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: elasticsearch
+        annotations:
+          summary: "Elasticsearch instance down"
+          description: "Elasticsearch instance {{ $labels.instance }} is down"
+
+      - alert: ElasticsearchClusterRed
+        expr: elasticsearch_cluster_health_status{color="red"} == 1
+        for: 2m
+        labels:
+          severity: critical
+          category: elasticsearch
+        annotations:
+          summary: "Elasticsearch cluster red"
+          description: "Elasticsearch cluster {{ $labels.cluster }} status is RED"
+
+      - alert: ElasticsearchDiskSpaceLow
+        expr: elasticsearch_filesystem_data_available_bytes / elasticsearch_filesystem_data_size_bytes * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+          category: elasticsearch
+        annotations:
+          summary: "Elasticsearch low disk space"
+          description: "Elasticsearch node {{ $labels.instance }} has less than 10% disk space available"

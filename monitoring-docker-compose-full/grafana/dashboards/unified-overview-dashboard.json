@@ -1,0 +1,293 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Docker Stack Complete - Unified Overview",
+    "tags": ["overview", "unified", "docker-stack"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Overview",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "CPU Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU Usage %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Memory Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+            "legendFormat": "Memory Usage %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 1},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Disk Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(node_filesystem_size_bytes{mountpoint=\"/\"} - node_filesystem_avail_bytes{mountpoint=\"/\"}) / node_filesystem_size_bytes{mountpoint=\"/\"} * 100",
+            "legendFormat": "Disk Usage %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 1},
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Network I/O",
+        "type": "stat", 
+        "targets": [
+          {
+            "expr": "rate(node_network_receive_bytes_total[5m]) + rate(node_network_transmit_bytes_total[5m])",
+            "legendFormat": "Network I/O",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 1},
+        "fieldConfig": {"defaults": {"unit": "Bps"}}
+      },
+      {
+        "id": 6,
+        "title": "Services Status Overview",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5}
+      },
+      {
+        "id": 7,
+        "title": "Redis Services",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(redis_up == 1)",
+            "legendFormat": "Redis UP",
+            "refId": "A"
+          },
+          {
+            "expr": "count(redis_up == 0)",
+            "legendFormat": "Redis DOWN",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 6},
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "0", "color": "green"}}, "type": "value"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "MySQL Services", 
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(mysql_up == 1)",
+            "legendFormat": "MySQL UP",
+            "refId": "A"
+          },
+          {
+            "expr": "count(mysql_up == 0)",
+            "legendFormat": "MySQL DOWN",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 6}
+      },
+      {
+        "id": 9,
+        "title": "MongoDB Services",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(mongodb_up == 1)",
+            "legendFormat": "MongoDB UP",
+            "refId": "A"
+          },
+          {
+            "expr": "count(mongodb_up == 0)",
+            "legendFormat": "MongoDB DOWN", 
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 4, "x": 8, "y": 6}
+      },
+      {
+        "id": 10,
+        "title": "Kafka Services",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "kafka_brokers",
+            "legendFormat": "Kafka Brokers",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 4, "x": 12, "y": 6}
+      },
+      {
+        "id": 11,
+        "title": "RabbitMQ Services",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(rabbitmq_up == 1)",
+            "legendFormat": "RabbitMQ UP",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 4, "x": 16, "y": 6}
+      },
+      {
+        "id": 12,
+        "title": "Elasticsearch Services",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(elasticsearch_up == 1)",
+            "legendFormat": "Elasticsearch UP",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 4, "x": 20, "y": 6}
+      },
+      {
+        "id": 13,
+        "title": "Container Overview",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 10}
+      },
+      {
+        "id": 14,
+        "title": "Running Containers",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "count(container_last_seen)",
+            "legendFormat": "Total Containers",
+            "refId": "A"
+          },
+          {
+            "expr": "count(container_last_seen{name=~\"redis.*\"})",
+            "legendFormat": "Redis Containers",
+            "refId": "B"
+          },
+          {
+            "expr": "count(container_last_seen{name=~\"mysql.*\"})",
+            "legendFormat": "MySQL Containers",
+            "refId": "C"
+          },
+          {
+            "expr": "count(container_last_seen{name=~\"mongo.*\"})",
+            "legendFormat": "MongoDB Containers",
+            "refId": "D"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 11}
+      },
+      {
+        "id": 15,
+        "title": "Container CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{name=~\"redis.*|mysql.*|mongo.*|kafka.*|rabbitmq.*|nginx.*|elasticsearch.*\"}[5m]) * 100",
+            "legendFormat": "{{name}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 11},
+        "yAxes": [{"unit": "percent"}]
+      },
+      {
+        "id": 16,
+        "title": "Container Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name=~\"redis.*|mysql.*|mongo.*|kafka.*|rabbitmq.*|nginx.*|elasticsearch.*\"}",
+            "legendFormat": "{{name}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 19},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 17,
+        "title": "Active Alerts",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "ALERTS{alertstate=\"firing\"}",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 27}
+      }
+    ]
+  }
+}

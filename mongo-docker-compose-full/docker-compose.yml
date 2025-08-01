@@ -1,0 +1,503 @@
+# ========================================================
+# MongoDB Docker Compose - Development Environment
+# ========================================================
+# 
+# This configuration provides three MongoDB deployment modes:
+# 
+# 1. Single Instance:     docker-compose --profile single up -d
+#    - Port: 27017
+#    - Use case: Development, testing
+# 
+# 2. Replica Set:         docker-compose --profile replica up -d
+#    - Primary: 27018, Secondary1: 27019, Secondary2: 27020
+#    - Use case: High availability, read scaling
+# 
+# 3. Sharded Cluster:     docker-compose --profile sharded up -d
+#    - Mongos: 27021, Config Servers: 27022-27024, Shards: 27025-27030
+#    - Use case: Horizontal scaling, massive datasets
+# 
+# Data volumes: ${HOME}/container-data/mongo/
+# ========================================================
+
+networks:
+  mongo-network:
+    driver: bridge
+
+services:
+  # ========================================
+  # Single Instance Mode
+  # ========================================
+  mongo-single:
+    image: mongo:7.0
+    container_name: mongo-single
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    command:
+      - mongod
+      - --auth
+      - --bind_ip_all
+    volumes:
+      - "${HOME}/container-data/mongo/single:/data/db"
+    ports:
+      - "27017:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--username", "root", "--password", "rootpassword", "--authenticationDatabase", "admin", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - single
+
+  # ========================================
+  # Replica Set Mode
+  # ========================================
+  mongo-primary:
+    image: mongo:7.0
+    container_name: mongo-primary
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --auth
+      - --bind_ip_all
+      - --keyFile
+      - /opt/keyfile/mongodb-keyfile
+    volumes:
+      - "${HOME}/container-data/mongo/replica/primary:/data/db"
+      - "./keyfile/mongodb-keyfile:/opt/keyfile/mongodb-keyfile:ro"
+    ports:
+      - "27018:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--username", "root", "--password", "rootpassword", "--authenticationDatabase", "admin", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - replica
+
+  mongo-secondary1:
+    image: mongo:7.0
+    container_name: mongo-secondary1
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --auth
+      - --bind_ip_all
+      - --keyFile
+      - /opt/keyfile/mongodb-keyfile
+    volumes:
+      - "${HOME}/container-data/mongo/replica/secondary1:/data/db"
+      - "./keyfile/mongodb-keyfile:/opt/keyfile/mongodb-keyfile:ro"
+    depends_on:
+      mongo-primary:
+        condition: service_healthy
+    ports:
+      - "27019:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--username", "root", "--password", "rootpassword", "--authenticationDatabase", "admin", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - replica
+
+  mongo-secondary2:
+    image: mongo:7.0
+    container_name: mongo-secondary2
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --auth
+      - --bind_ip_all
+      - --keyFile
+      - /opt/keyfile/mongodb-keyfile
+    volumes:
+      - "${HOME}/container-data/mongo/replica/secondary2:/data/db"
+      - "./keyfile/mongodb-keyfile:/opt/keyfile/mongodb-keyfile:ro"
+    depends_on:
+      mongo-primary:
+        condition: service_healthy
+    ports:
+      - "27020:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--username", "root", "--password", "rootpassword", "--authenticationDatabase", "admin", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - replica
+
+  mongo-replica-init:
+    image: mongo:7.0
+    container_name: mongo-replica-init
+    depends_on:
+      mongo-primary:
+        condition: service_healthy
+      mongo-secondary1:
+        condition: service_healthy
+      mongo-secondary2:
+        condition: service_healthy
+    entrypoint: ["/init-replica.sh"]
+    volumes:
+      - "./scripts/init-replica.sh:/init-replica.sh:ro"
+    networks:
+      - mongo-network
+    restart: "no"
+    profiles:
+      - replica
+
+  # ========================================
+  # Sharded Cluster Mode
+  # ========================================
+  
+  # Config Server Replica Set (configrs)
+  mongo-config1:
+    image: mongo:7.0
+    container_name: mongo-config1
+    command:
+      - mongod
+      - --configsvr
+      - --replSet
+      - configrs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/config1:/data/configdb"
+    ports:
+      - "27022:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  mongo-config2:
+    image: mongo:7.0
+    container_name: mongo-config2
+    command:
+      - mongod
+      - --configsvr
+      - --replSet
+      - configrs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/config2:/data/configdb"
+    depends_on:
+      mongo-config1:
+        condition: service_healthy
+    ports:
+      - "27023:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  mongo-config3:
+    image: mongo:7.0
+    container_name: mongo-config3
+    command:
+      - mongod
+      - --configsvr
+      - --replSet
+      - configrs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/config3:/data/configdb"
+    depends_on:
+      mongo-config1:
+        condition: service_healthy
+    ports:
+      - "27024:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  # Mongos Query Router
+  mongo-router:
+    image: mongo:7.0
+    container_name: mongo-router
+    command:
+      - mongos
+      - --configdb
+      - configrs/mongo-config1:27017,mongo-config2:27017,mongo-config3:27017
+      - --bind_ip_all
+      - --port
+      - "27017"
+    depends_on:
+      mongo-config1:
+        condition: service_healthy
+      mongo-config2:
+        condition: service_healthy
+      mongo-config3:
+        condition: service_healthy
+    ports:
+      - "27021:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  # Shard 1 Replica Set (shard1rs)
+  mongo-shard1-1:
+    image: mongo:7.0
+    container_name: mongo-shard1-1
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard1rs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/shard1-1:/data/db"
+    ports:
+      - "27025:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  mongo-shard1-2:
+    image: mongo:7.0
+    container_name: mongo-shard1-2
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard1rs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/shard1-2:/data/db"
+    depends_on:
+      mongo-shard1-1:
+        condition: service_healthy
+    ports:
+      - "27026:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  mongo-shard1-3:
+    image: mongo:7.0
+    container_name: mongo-shard1-3
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard1rs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/shard1-3:/data/db"
+    depends_on:
+      mongo-shard1-1:
+        condition: service_healthy
+    ports:
+      - "27027:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  # Shard 2 Replica Set (shard2rs)
+  mongo-shard2-1:
+    image: mongo:7.0
+    container_name: mongo-shard2-1
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard2rs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/shard2-1:/data/db"
+    ports:
+      - "27028:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  mongo-shard2-2:
+    image: mongo:7.0
+    container_name: mongo-shard2-2
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard2rs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/shard2-2:/data/db"
+    depends_on:
+      mongo-shard2-1:
+        condition: service_healthy
+    ports:
+      - "27029:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  mongo-shard2-3:
+    image: mongo:7.0
+    container_name: mongo-shard2-3
+    command:
+      - mongod
+      - --shardsvr
+      - --replSet
+      - shard2rs
+      - --bind_ip_all
+      - --port
+      - "27017"
+    volumes:
+      - "${HOME}/container-data/mongo/sharded/shard2-3:/data/db"
+    depends_on:
+      mongo-shard2-1:
+        condition: service_healthy
+    ports:
+      - "27030:27017"
+    networks:
+      - mongo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    profiles:
+      - sharded
+
+  # Sharded Cluster Initialization
+  mongo-cluster-init:
+    image: mongo:7.0
+    container_name: mongo-cluster-init
+    depends_on:
+      mongo-router:
+        condition: service_healthy
+      mongo-shard1-1:
+        condition: service_healthy
+      mongo-shard1-2:
+        condition: service_healthy
+      mongo-shard1-3:
+        condition: service_healthy
+      mongo-shard2-1:
+        condition: service_healthy
+      mongo-shard2-2:
+        condition: service_healthy
+      mongo-shard2-3:
+        condition: service_healthy
+    entrypoint: ["/init-sharded.sh"]
+    volumes:
+      - "./scripts/init-sharded.sh:/init-sharded.sh:ro"
+    networks:
+      - mongo-network
+    restart: "no"
+    profiles:
+      - sharded

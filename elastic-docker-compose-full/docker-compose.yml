@@ -1,0 +1,124 @@
+# ========================================================
+# Elasticsearch Docker Compose - Dual Workflow Setup
+# ========================================================
+# 
+# This configuration provides dual log processing workflows:
+# 
+# Workflow 1: Docker Container Logs
+#   Filebeat -> Logstash:5000 -> Elasticsearch -> Kibana
+# 
+# Workflow 2: Application Logs  
+#   App logs -> Logstash -> Elasticsearch -> Kibana
+#   - File input: ./logs/app/*.log
+#   - TCP input: localhost:5001
+# 
+# Usage: docker-compose up -d
+# Kibana: http://localhost:5601
+# Elasticsearch: http://localhost:9200
+# ========================================================
+
+
+networks:
+  elastic-network:
+    driver: bridge
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.monitoring.collection.enabled=true
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - cluster.name=elastic-cluster
+      - node.name=elasticsearch
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    networks:
+      - elastic-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+      SERVER_NAME: kibana
+      SERVER_HOST: "0.0.0.0"
+    networks:
+      - elastic-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.0
+    container_name: logstash
+    ports:
+      - "5002:5000/tcp"
+      - "5001:5001/tcp"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logs/app:/usr/share/logstash/app-logs:ro
+    environment:
+      - LS_JAVA_OPTS=-Xmx512m -Xms512m
+      - PIPELINE_WORKERS=2
+      - XPACK_MONITORING_ENABLED=false
+    networks:
+      - elastic-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600/_node/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.0
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/filebeat:/usr/share/filebeat/data
+    networks:
+      - elastic-network
+    depends_on:
+      logstash:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "filebeat test config -c /usr/share/filebeat/filebeat.yml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped

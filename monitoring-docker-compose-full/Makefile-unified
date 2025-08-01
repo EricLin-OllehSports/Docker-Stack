@@ -1,0 +1,378 @@
+#!/usr/bin/make -f
+
+# Docker Stack Complete - Unified Monitoring Makefile
+
+.PHONY: help
+help:
+	@echo "Docker Stack Complete - Unified Monitoring Commands"
+	@echo ""
+	@echo "🚀 Basic Commands:"
+	@echo "  make start              - Start core unified monitoring"
+	@echo "  make stop               - Stop all monitoring services"
+	@echo "  make restart            - Restart all services"
+	@echo "  make logs               - Show logs from all services"
+	@echo "  make status             - Show status of all services"
+	@echo "  make clean              - Stop and remove all containers and volumes"
+	@echo ""
+	@echo "📊 Stack-Specific Monitoring:"
+	@echo "  make redis-single       - Monitor Redis single instance"
+	@echo "  make redis-replication  - Monitor Redis master-slave"
+	@echo "  make redis-sentinel     - Monitor Redis sentinel HA"
+	@echo "  make redis-cluster      - Monitor Redis cluster"
+	@echo "  make redis-all          - Monitor all Redis modes"
+	@echo ""
+	@echo "  make mysql-single       - Monitor MySQL single instance"
+	@echo "  make mysql-replication  - Monitor MySQL master-slave"
+	@echo "  make mysql-all          - Monitor all MySQL modes"
+	@echo ""
+	@echo "  make mongo-single       - Monitor MongoDB single instance"
+	@echo "  make mongo-replica      - Monitor MongoDB replica set"
+	@echo "  make mongo-sharded      - Monitor MongoDB sharded cluster"
+	@echo "  make mongo-all          - Monitor all MongoDB modes"
+	@echo ""
+	@echo "  make kafka              - Monitor Kafka cluster"
+	@echo "  make rabbitmq           - Monitor RabbitMQ"
+	@echo "  make nginx              - Monitor Nginx"
+	@echo "  make elasticsearch      - Monitor Elasticsearch"
+	@echo ""
+	@echo "  make spring-boot-demo   - Start Spring Boot demo applications"
+	@echo "  make spring-boot-admin  - Start Spring Boot Admin server"
+	@echo ""
+	@echo "  make all                - Monitor ALL services"
+	@echo ""
+	@echo "🧪 Testing & Validation:"
+	@echo "  make test               - Run comprehensive unified test suite"
+	@echo "  make test-integration   - Test stack integration only"
+	@echo "  make health             - Check health of all services"
+	@echo "  make targets            - Show Prometheus targets"
+	@echo ""
+	@echo "🔧 Development & Debug:"
+	@echo "  make setup-networks     - Create required external networks"
+	@echo "  make debug-redis        - Debug Redis monitoring"
+	@echo "  make debug-mysql        - Debug MySQL monitoring"
+	@echo "  make debug-mongo        - Debug MongoDB monitoring"
+	@echo "  make shell-prometheus   - Shell into Prometheus container"
+	@echo "  make shell-grafana      - Shell into Grafana container"
+	@echo ""
+	@echo "📈 URLs:"
+	@echo "  Prometheus:   http://localhost:9090"
+	@echo "  Grafana:      http://localhost:3000 (admin/admin123)"
+	@echo "  AlertManager: http://localhost:9093"
+	@echo "  cAdvisor:     http://localhost:8080"
+
+# Configuration
+COMPOSE_FILE = docker-compose-unified.yml
+COMPOSE_CMD = docker-compose -f $(COMPOSE_FILE)
+
+# Core services
+.PHONY: start
+start: setup-networks
+	$(COMPOSE_CMD) up -d prometheus grafana alertmanager node_exporter cadvisor
+	@echo ""
+	@echo "✅ Core unified monitoring started!"
+	@echo "🔗 Prometheus:   http://localhost:9090"
+	@echo "🔗 Grafana:      http://localhost:3000 (admin/admin123)"
+	@echo "🔗 AlertManager: http://localhost:9093"
+	@echo "🔗 cAdvisor:     http://localhost:8080"
+
+.PHONY: stop
+stop:
+	$(COMPOSE_CMD) down
+
+.PHONY: restart
+restart: stop start
+
+.PHONY: logs
+logs:
+	$(COMPOSE_CMD) logs -f
+
+.PHONY: status
+status:
+	$(COMPOSE_CMD) ps
+
+.PHONY: clean
+clean:
+	$(COMPOSE_CMD) down -v
+	docker system prune -f
+	@echo "✅ Cleaned up all monitoring resources"
+
+# Setup external networks
+.PHONY: setup-networks
+setup-networks:
+	@echo "🔗 Setting up external networks..."
+	@docker network create redis-docker-compose-full_redis-network 2>/dev/null || true
+	@docker network create mysql-docker-compose-full_mysql-network 2>/dev/null || true
+	@docker network create mongo-docker-compose-full_mongo-network 2>/dev/null || true
+	@docker network create kafka-docker-compose-full_default 2>/dev/null || true
+	@docker network create rabbitmq-docker-compose-full_default 2>/dev/null || true
+	@docker network create nginx-docker-compose-full_default 2>/dev/null || true
+	@docker network create elastic-docker-compose-full_elastic 2>/dev/null || true
+	@echo "✅ External networks ready"
+
+# Redis monitoring profiles
+.PHONY: redis-single
+redis-single: setup-networks
+	$(COMPOSE_CMD) --profile redis-single up -d
+	@echo "✅ Redis single instance monitoring started"
+
+.PHONY: redis-replication
+redis-replication: setup-networks
+	$(COMPOSE_CMD) --profile redis-replication up -d
+	@echo "✅ Redis master-slave monitoring started"
+
+.PHONY: redis-sentinel
+redis-sentinel: setup-networks
+	$(COMPOSE_CMD) --profile redis-sentinel up -d
+	@echo "✅ Redis sentinel HA monitoring started"
+
+.PHONY: redis-cluster
+redis-cluster: setup-networks
+	$(COMPOSE_CMD) --profile redis-cluster up -d
+	@echo "✅ Redis cluster monitoring started"
+
+.PHONY: redis-all
+redis-all: setup-networks
+	$(COMPOSE_CMD) --profile redis-all up -d
+	@echo "✅ All Redis modes monitoring started"
+
+# MySQL monitoring profiles
+.PHONY: mysql-single
+mysql-single: setup-networks
+	$(COMPOSE_CMD) --profile mysql-single up -d
+	@echo "✅ MySQL single instance monitoring started"
+
+.PHONY: mysql-replication
+mysql-replication: setup-networks
+	$(COMPOSE_CMD) --profile mysql-replication up -d
+	@echo "✅ MySQL master-slave monitoring started"
+
+.PHONY: mysql-all
+mysql-all: setup-networks
+	$(COMPOSE_CMD) --profile mysql-all up -d
+	@echo "✅ All MySQL modes monitoring started"
+
+# MongoDB monitoring profiles
+.PHONY: mongo-single
+mongo-single: setup-networks
+	$(COMPOSE_CMD) --profile mongo-single up -d
+	@echo "✅ MongoDB single instance monitoring started"
+
+.PHONY: mongo-replica
+mongo-replica: setup-networks
+	$(COMPOSE_CMD) --profile mongo-replica up -d
+	@echo "✅ MongoDB replica set monitoring started"
+
+.PHONY: mongo-sharded
+mongo-sharded: setup-networks
+	$(COMPOSE_CMD) --profile mongo-sharded up -d
+	@echo "✅ MongoDB sharded cluster monitoring started"
+
+.PHONY: mongo-all
+mongo-all: setup-networks
+	$(COMPOSE_CMD) --profile mongo-all up -d
+	@echo "✅ All MongoDB modes monitoring started"
+
+# Other service monitoring
+.PHONY: kafka
+kafka: setup-networks
+	$(COMPOSE_CMD) --profile kafka up -d
+	@echo "✅ Kafka monitoring started"
+
+.PHONY: rabbitmq
+rabbitmq: setup-networks
+	$(COMPOSE_CMD) --profile rabbitmq up -d
+	@echo "✅ RabbitMQ monitoring started"
+
+.PHONY: nginx
+nginx: setup-networks
+	$(COMPOSE_CMD) --profile nginx up -d
+	@echo "✅ Nginx monitoring started"
+
+.PHONY: elasticsearch
+elasticsearch: setup-networks
+	$(COMPOSE_CMD) --profile elasticsearch up -d
+	@echo "✅ Elasticsearch monitoring started"
+
+# All services
+.PHONY: all
+all: setup-networks
+	$(COMPOSE_CMD) --profile all up -d
+	@echo "✅ ALL services monitoring started!"
+	@echo ""
+	@echo "📊 Monitoring Coverage:"
+	@echo "  • System: Node Exporter + cAdvisor"
+	@echo "  • Redis: All modes (Single/Replication/Sentinel/Cluster)"
+	@echo "  • MySQL: All modes (Single/Master-Slave)"
+	@echo "  • MongoDB: All modes (Single/Replica/Sharded)"
+	@echo "  • Message Queues: Kafka + RabbitMQ"
+	@echo "  • Web Servers: Nginx"
+	@echo "  • Search: Elasticsearch"
+
+# Testing
+.PHONY: test
+test:
+	@echo "🧪 Running comprehensive unified monitoring test suite..."
+	./test-unified-monitoring.sh
+
+.PHONY: test-integration
+test-integration:
+	@echo "🧪 Testing stack integration..."
+	@./test-unified-monitoring.sh | grep -A 20 "Testing Stack Integrations"
+
+.PHONY: health
+health:
+	@echo "🏥 Health Check - Unified Monitoring"
+	@echo "===================================="
+	@$(COMPOSE_CMD) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || $(COMPOSE_CMD) ps
+	@echo ""
+	@echo "🔍 Service Health:"
+	@curl -s http://localhost:9090/-/healthy > /dev/null && echo "✅ Prometheus" || echo "❌ Prometheus"
+	@curl -s http://localhost:3000/api/health > /dev/null && echo "✅ Grafana" || echo "❌ Grafana"
+	@curl -s http://localhost:9093/api/v1/status > /dev/null && echo "✅ AlertManager" || echo "❌ AlertManager"
+	@curl -s http://localhost:9100/metrics > /dev/null && echo "✅ Node Exporter" || echo "❌ Node Exporter"
+	@curl -s http://localhost:8080/metrics > /dev/null && echo "✅ cAdvisor" || echo "❌ cAdvisor"
+
+.PHONY: targets
+targets:
+	@echo "🎯 Prometheus Targets Status"
+	@echo "============================"
+	@curl -s http://localhost:9090/api/v1/targets | jq -r '.data.activeTargets[] | "\(.labels.job): \(.health) (\(.lastError // "OK"))"' 2>/dev/null || echo "Prometheus not accessible"
+
+# Debug commands
+.PHONY: debug-redis
+debug-redis:
+	@echo "🔍 Redis Monitoring Debug"
+	@echo "========================="
+	@echo "Redis Exporters Status:"
+	@$(COMPOSE_CMD) ps | grep redis-exporter || echo "No Redis exporters running"
+	@echo ""
+	@echo "Testing Redis connectivity:"
+	@for port in 9121 9122 9123 9124; do \
+		curl -s http://localhost:$$port/metrics > /dev/null && echo "✅ Port $$port: UP" || echo "❌ Port $$port: DOWN"; \
+	done
+
+.PHONY: debug-mysql
+debug-mysql:
+	@echo "🔍 MySQL Monitoring Debug"
+	@echo "========================="
+	@echo "MySQL Exporters Status:"
+	@$(COMPOSE_CMD) ps | grep mysql-exporter || echo "No MySQL exporters running"
+	@echo ""
+	@echo "Testing MySQL connectivity:"
+	@for port in 9104 9105 9106; do \
+		curl -s http://localhost:$$port/metrics > /dev/null && echo "✅ Port $$port: UP" || echo "❌ Port $$port: DOWN"; \
+	done
+
+.PHONY: debug-mongo
+debug-mongo:
+	@echo "🔍 MongoDB Monitoring Debug"
+	@echo "==========================="
+	@echo "MongoDB Exporters Status:"
+	@$(COMPOSE_CMD) ps | grep mongodb-exporter || echo "No MongoDB exporters running"
+	@echo ""
+	@echo "Testing MongoDB connectivity:"
+	@for port in 9216 9217 9218; do \
+		curl -s http://localhost:$$port/metrics > /dev/null && echo "✅ Port $$port: UP" || echo "❌ Port $$port: DOWN"; \
+	done
+
+# Shell access
+.PHONY: shell-prometheus
+shell-prometheus:
+	$(COMPOSE_CMD) exec prometheus sh
+
+.PHONY: shell-grafana
+shell-grafana:
+	$(COMPOSE_CMD) exec grafana bash
+
+# Configuration management
+.PHONY: config-check
+config-check:
+	@echo "🔧 Configuration Validation"
+	@echo "==========================="
+	@$(COMPOSE_CMD) config > /dev/null && echo "✅ Docker Compose config valid" || echo "❌ Docker Compose config invalid"
+	@promtool check config prometheus/prometheus-unified.yml 2>/dev/null && echo "✅ Prometheus config valid" || echo "❌ Prometheus config invalid"
+
+.PHONY: reload-prometheus
+reload-prometheus:
+	@echo "🔄 Reloading Prometheus configuration..."
+	@curl -s -X POST http://localhost:9090/-/reload && echo "✅ Prometheus config reloaded" || echo "❌ Failed to reload Prometheus"
+
+# Quick stack starts (requires other stacks to be available)
+.PHONY: start-redis-stack
+start-redis-stack:
+	@echo "🚀 Starting Redis stack for monitoring..."
+	@cd ../redis-docker-compose-full && docker compose --profile single up -d && cd -
+	@$(MAKE) redis-single
+
+.PHONY: start-mysql-stack
+start-mysql-stack:
+	@echo "🚀 Starting MySQL stack for monitoring..."
+	@cd ../mysql-docker-compose-full && docker compose --profile single up -d && cd -
+	@$(MAKE) mysql-single
+
+.PHONY: start-mongo-stack
+start-mongo-stack:
+	@echo "🚀 Starting MongoDB stack for monitoring..."
+	@cd ../mongo-docker-compose-full && docker compose --profile single up -d && cd -
+	@$(MAKE) mongo-single
+
+# Demo mode - start everything
+.PHONY: demo
+demo: setup-networks
+	@echo "🎬 Starting DEMO mode - Full Stack Monitoring"
+	@echo "=============================================="
+	@echo ""
+	@echo "Starting target services..."
+	@cd ../redis-docker-compose-full && docker compose --profile single up -d > /dev/null 2>&1 && echo "✅ Redis started" || echo "⚠️  Redis stack not found"
+	@cd ../mysql-docker-compose-full && docker compose --profile single up -d > /dev/null 2>&1 && echo "✅ MySQL started" || echo "⚠️  MySQL stack not found"
+	@cd ../mongo-docker-compose-full && docker compose --profile single up -d > /dev/null 2>&1 && echo "✅ MongoDB started" || echo "⚠️  MongoDB stack not found"
+	@echo ""
+	@echo "Starting unified monitoring..."
+	@$(COMPOSE_CMD) --profile all up -d
+	@echo ""
+	@echo "🎉 DEMO mode ready!"
+	@echo ""
+	@echo "📊 Access your monitoring:"
+	@echo "  Prometheus:   http://localhost:9090"
+	@echo "  Grafana:      http://localhost:3000 (admin/admin123)"
+	@echo "  AlertManager: http://localhost:9093"
+	@echo "  cAdvisor:     http://localhost:8080"
+	@echo ""
+	@echo "🧪 Run tests: make test"
+
+# Spring Boot specific profiles
+.PHONY: spring-boot-demo
+spring-boot-demo: setup-networks
+	$(COMPOSE_CMD) --profile spring-boot-demo up -d
+	@echo "✅ Spring Boot demo applications started"
+	@echo "🔗 Demo App 1: http://localhost:8081"
+	@echo "🔗 Demo App 2: http://localhost:8082"
+	@echo "🔗 Actuator (App 1): http://localhost:8081/actuator"
+	@echo "🔗 Metrics (App 1): http://localhost:8081/actuator/prometheus"
+
+.PHONY: spring-boot-admin
+spring-boot-admin: setup-networks
+	$(COMPOSE_CMD) --profile spring-boot-admin up -d
+	@echo "✅ Spring Boot Admin server started"
+	@echo "🔗 Spring Boot Admin: http://localhost:8080"
+
+# Spring Boot testing
+.PHONY: test-spring-boot
+test-spring-boot:
+	@echo "🧪 Testing Spring Boot monitoring..."
+	@echo "Checking demo applications..."
+	@curl -s http://localhost:8081/actuator/health > /dev/null && echo "✅ Spring App 1 healthy" || echo "❌ Spring App 1 unhealthy"
+	@curl -s http://localhost:8082/actuator/health > /dev/null && echo "✅ Spring App 2 healthy" || echo "❌ Spring App 2 unhealthy"
+	@echo "Checking Prometheus metrics..."
+	@curl -s http://localhost:8081/actuator/prometheus | grep -q "jvm_memory" && echo "✅ JVM metrics available" || echo "❌ JVM metrics missing"
+	@curl -s http://localhost:8081/actuator/prometheus | grep -q "http_server_requests" && echo "✅ HTTP metrics available" || echo "❌ HTTP metrics missing"
+
+# Clean demo
+.PHONY: clean-demo
+clean-demo:
+	@echo "🧹 Cleaning up DEMO mode..."
+	@$(COMPOSE_CMD) down -v
+	@cd ../redis-docker-compose-full && docker compose down > /dev/null 2>&1 || true
+	@cd ../mysql-docker-compose-full && docker compose down > /dev/null 2>&1 || true
+	@cd ../mongo-docker-compose-full && docker compose down > /dev/null 2>&1 || true
+	@echo "✅ DEMO cleanup complete"

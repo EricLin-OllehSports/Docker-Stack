@@ -1,0 +1,42 @@
+# Elasticsearch data directory
+data/elasticsearch/
+data/filebeat/
+
+# Docker volumes
+es-data-*/
+
+# SSL certificates and keys
+*.crt
+*.key
+*.pem
+*.p12
+certs/
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+*.swp
+*~
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Environment files
+.env
+.env.local
+.env.production

@@ -1,0 +1,209 @@
+version: '3.8'
+
+services:
+  # Jaeger - 分散式追踪系統
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: jaeger
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "6831:6831/udp" # Compact thrift protocol (used by most SDKs)
+      - "6832:6832/udp" # Binary thrift protocol
+      - "5778:5778"     # Sampling/config endpoint
+      - "14250:14250"   # gRPC for model.proto
+      - "14268:14268"   # HTTP collector
+      - "14269:14269"   # Admin port (health check)
+      - "9411:9411"     # Zipkin compatible endpoint
+    restart: unless-stopped
+    networks:
+      - trace-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:14269/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - jaeger
+      - full
+
+  # OpenTelemetry Collector - 遙測數據收集和處理
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.97.0
+    container_name: otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics exposed by the collector
+      - "8889:8889"   # Prometheus exporter metrics
+      - "13133:13133" # Health check extension
+      - "55679:55679" # zPages extension
+    depends_on:
+      jaeger:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - trace-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    profiles:
+      - otel
+      - full
+
+  # Zipkin - 另一個追踪系統選項
+  zipkin:
+    image: openzipkin/zipkin:3.0
+    container_name: zipkin
+    ports:
+      - "9412:9411"   # Zipkin UI and HTTP API
+    environment:
+      - STORAGE_TYPE=mem
+      - JAVA_OPTS=-Xms256m -Xmx512m
+    restart: unless-stopped
+    networks:
+      - trace-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9411/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    profiles:
+      - zipkin
+      - full
+
+  # Prometheus - 用於收集 OpenTelemetry 指標
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    container_name: prometheus-trace
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - trace-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    profiles:
+      - metrics
+      - full
+
+  # Grafana - 視覺化儀表板
+  grafana:
+    image: grafana/grafana:10.3.3
+    container_name: grafana-trace
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - trace-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    profiles:
+      - metrics
+      - full
+
+  # 示例應用程式 - 生成追踪數據
+  demo-app:
+    image: otel/opentelemetry-collector-contrib:0.97.0
+    container_name: demo-app
+    command: ["--config=/etc/demo-config.yaml"]
+    volumes:
+      - ./demo/demo-config.yaml:/etc/demo-config.yaml:ro
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=demo-service
+      - OTEL_TRACES_EXPORTER=otlp
+      - OTEL_METRICS_EXPORTER=otlp
+      - OTEL_LOGS_EXPORTER=otlp
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+    networks:
+      - trace-network
+    profiles:
+      - demo
+      - full
+
+networks:
+  trace-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

@@ -1,0 +1,333 @@
+
+# =======================================================
+# Redis Docker Compose - Complete Multi-Mode Setup
+# =======================================================
+# 
+# This configuration provides four Redis deployment modes:
+# 
+# 1. Single Instance:     docker-compose --profile single up -d
+#    - Port: 6379
+#    - Use case: Development, testing
+# 
+# 2. Master-Slave:        docker-compose --profile replication up -d
+#    - Master: 6380, Slave: 6381
+#    - Use case: Read scaling, backup
+# 
+# 3. Sentinel (HA):       docker-compose --profile sentinel up -d
+#    - Master: 6382, Slave: 6383, Sentinel: 26379
+#    - Use case: High availability, automatic failover
+# 
+# 4. Cluster:             docker-compose --profile cluster up -d
+#    - Nodes: 7001, 7002, 7003 (+ 17001, 17002, 17003)
+#    - Use case: Horizontal scaling, data sharding
+# 
+# Data volumes: ${HOME}/container-data/redis/data/
+# =======================================================
+
+networks:
+  redis-network:
+    driver: bridge
+
+services:
+  # ========================================
+  # Single Instance Mode
+  # ========================================
+  redis-single:
+    image: arm64v8/redis:latest
+    container_name: redis-single
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --appendonly
+      - "yes"
+    volumes:
+      - "${HOME}/container-data/redis/data/single:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "6379:6379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - single
+
+  # ========================================
+  # Master-Slave Replication Mode
+  # ========================================
+  redis-master:
+    image: arm64v8/redis:latest
+    container_name: redis-master
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --appendonly
+      - "yes"
+    volumes:
+      - "${HOME}/container-data/redis/data/master:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "6380:6379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - replication
+
+  redis-slave:
+    image: arm64v8/redis:latest
+    container_name: redis-slave
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --appendonly
+      - "yes"
+      - --slaveof
+      - redis-master
+      - "6379"
+    volumes:
+      - "${HOME}/container-data/redis/data/slave:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "6381:6379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - replication
+      
+
+  # ========================================
+  # Sentinel Mode (High Availability)
+  # ========================================
+  redis-sentinel-master:
+    image: arm64v8/redis:latest
+    container_name: redis-sentinel-master
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --appendonly
+      - "yes"
+    volumes:
+      - "${HOME}/container-data/redis/data/sentinel-master:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "6382:6379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - sentinel
+
+  redis-sentinel-slave:
+    image: arm64v8/redis:latest
+    container_name: redis-sentinel-slave
+    depends_on:
+      redis-sentinel-master:
+        condition: service_healthy
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --appendonly
+      - "yes"
+      - --slaveof
+      - redis-sentinel-master
+      - "6379"
+    volumes:
+      - "${HOME}/container-data/redis/data/sentinel-slave:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "6383:6379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - sentinel
+
+  redis-sentinel:
+    image: arm64v8/redis:latest
+    container_name: redis-sentinel
+    depends_on:
+      redis-sentinel-master:
+        condition: service_healthy
+      redis-sentinel-slave:
+        condition: service_healthy
+    entrypoint: ["/start-sentinel.sh"]
+    volumes:
+      - "./scripts/start-sentinel.sh:/start-sentinel.sh:ro"
+    ports:
+      - "26379:26379"
+    networks:
+      - redis-network
+    restart: unless-stopped
+    profiles:
+      - sentinel
+
+  # ========================================
+  # Cluster Mode (Horizontal Scaling)
+  # ========================================
+  redis-cluster-node-1:
+    image: arm64v8/redis:latest
+    container_name: redis-cluster-node-1
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --cluster-announce-ip
+      - "127.0.0.1"
+      - --cluster-announce-port
+      - "7001"
+      - --cluster-announce-bus-port
+      - "17001"
+      - --appendonly
+      - "yes"
+    volumes:
+      - "${HOME}/container-data/redis/data/cluster/node1:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "7001:6379"
+      - "17001:16379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - cluster
+
+  redis-cluster-node-2:
+    image: arm64v8/redis:latest
+    container_name: redis-cluster-node-2
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --cluster-announce-ip
+      - "127.0.0.1"
+      - --cluster-announce-port
+      - "7002"
+      - --cluster-announce-bus-port
+      - "17002"
+      - --appendonly
+      - "yes"
+    volumes:
+      - "${HOME}/container-data/redis/data/cluster/node2:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "7002:6379"
+      - "17002:16379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - cluster
+
+  redis-cluster-node-3:
+    image: arm64v8/redis:latest
+    container_name: redis-cluster-node-3
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --cluster-announce-ip
+      - "127.0.0.1"
+      - --cluster-announce-port
+      - "7003"
+      - --cluster-announce-bus-port
+      - "17003"
+      - --appendonly
+      - "yes"
+    volumes:
+      - "${HOME}/container-data/redis/data/cluster/node3:/data"
+      - "./redis_config/redis.conf:/usr/local/etc/redis/redis.conf"
+    ports:
+      - "7003:6379"
+      - "17003:16379"
+    networks:
+      - redis-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - cluster
+
+  redis-cluster-init:
+    image: arm64v8/redis:latest
+    container_name: redis-cluster-init
+    depends_on:
+      redis-cluster-node-1:
+        condition: service_healthy
+      redis-cluster-node-2:
+        condition: service_healthy
+      redis-cluster-node-3:
+        condition: service_healthy
+    entrypoint: ["/init-cluster.sh"]
+    volumes:
+      - "./scripts/init-cluster.sh:/init-cluster.sh:ro"
+    networks:
+      - redis-network
+    restart: "no"
+    profiles:
+      - cluster
+

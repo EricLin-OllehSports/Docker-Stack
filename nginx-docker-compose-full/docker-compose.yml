@@ -1,0 +1,269 @@
+# Docker Compose version - supports features up to Docker Engine 20.10.0+
+# Available versions: 3.0-3.9, check https://docs.docker.com/compose/compose-file/
+version: "3.9"
+
+# Network definitions for service isolation
+networks:
+  # Frontend network for NGINX and HAProxy communication
+  nginx-network:
+    driver: bridge  # Options: bridge, overlay, host, none, macvlan
+    # Additional options:
+    # ipam:
+    #   config:
+    #     - subnet: 172.20.0.0/16
+    # driver_opts:
+    #   com.docker.network.bridge.name: nginx-br
+  
+  # Backend network for application services
+  backend-network:
+    driver: bridge
+    # Options for isolation:
+    # internal: true  # Restricts external access
+    # attachable: true  # Allows manual container attachment
+
+# Persistent volumes for data storage
+volumes:
+  # NGINX log storage - persists across container restarts
+  nginx-logs:
+    # Volume driver options:
+    # driver: local  # Options: local, nfs, rexray, etc.
+    # driver_opts:
+    #   type: none
+    #   o: bind
+    #   device: /host/path/logs
+  
+  # SSL certificates storage
+  ssl-certs:
+    # External volume option:
+    # external: true
+    # name: shared_ssl_certs
+
+services:
+  # ==========================================
+  # HAProxy Load Balancer (High Availability Mode)
+  # ==========================================
+  # Provides load balancing, SSL termination, and health checks
+  # Alternative options: NGINX Plus, Traefik, Envoy, AWS ALB
+  haproxy:
+    # HAProxy image versions: 2.8-alpine (LTS), 2.9-alpine (latest stable)
+    # Alternative images: haproxy:lts-alpine, haproxy:latest
+    image: haproxy:2.8-alpine
+    container_name: haproxy
+    
+    # Port mappings - can be customized via environment variables
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"     # HTTP traffic
+      - "${NGINX_HTTPS_PORT:-443}:443"   # HTTPS traffic  
+      - "${HAPROXY_STATS_PORT:-8404}:8404"  # HAProxy Statistics UI
+      # Additional ports you might need:
+      # - "8080:8080"  # Alternative HTTP port
+      # - "9000:9000"  # Management interface
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ssl-certs:/etc/ssl/certs
+      - nginx-logs:/var/log/haproxy
+    depends_on:
+      - nginx-1
+      - nginx-2
+      - nginx-3
+    networks:
+      - nginx-network
+    # Restart policy options: no, always, on-failure, unless-stopped
+    restart: unless-stopped
+    
+    # Profile-based service grouping for selective deployment
+    profiles:
+      - ha              # High availability mode
+      - load-balancer   # Load balancing focused deployment
+      # Additional profiles you can add:
+      # - production    # Production environment
+      # - staging       # Staging environment
+    # Health check configuration
+    healthcheck:
+      # Health check command options:
+      # - CMD: Direct command execution
+      # - CMD-SHELL: Shell command execution  
+      # - NONE: Disable health checks
+      test: ["CMD", "curl", "-f", "http://localhost:8404/stats"]
+      
+      # Health check timing options:
+      interval: 30s      # How often to run (10s-300s recommended)
+      timeout: 10s       # Max time to wait (1s-60s recommended)
+      retries: 3         # Failed attempts before unhealthy (1-5 recommended)
+      start_period: 60s  # Grace period on startup
+      # disable: true    # Uncomment to disable health checks
+
+  # ==========================================
+  # NGINX Cluster Instances (High Availability)
+  # ==========================================
+  # Multiple NGINX instances for redundancy and load distribution
+  # Scale options: 2-5 instances recommended for HA
+  nginx-1:
+    # NGINX image options:
+    # - nginx:1.25-alpine (lightweight, recommended)
+    # - nginx:1.25 (full Debian-based)
+    # - nginx:mainline-alpine (latest features)
+    # - nginx:stable-alpine (stable release)
+    image: nginx:${NGINX_VERSION:-1.25-alpine}
+    container_name: nginx-1
+    
+    # Expose ports to other containers (not to host)
+    expose:
+      - "80"   # HTTP port
+      - "443"  # HTTPS port
+      # Additional ports you might expose:
+      # - "8080"  # Alternative HTTP port
+      # - "9113"  # Metrics port
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    networks:
+      - nginx-network
+      - backend-network
+    restart: unless-stopped
+    profiles:
+      - ha
+      - nginx-cluster
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx-2:
+    image: nginx:1.25-alpine
+    container_name: nginx-2
+    expose:
+      - "80"
+      - "443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    networks:
+      - nginx-network
+      - backend-network
+    restart: unless-stopped
+    profiles:
+      - ha
+      - nginx-cluster
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx-3:
+    image: nginx:1.25-alpine
+    container_name: nginx-3
+    expose:
+      - "80"
+      - "443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    networks:
+      - nginx-network
+      - backend-network
+    restart: unless-stopped
+    profiles:
+      - ha
+      - nginx-cluster
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Single NGINX instance (Original mode)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    networks:
+      - nginx-network
+      - backend-network
+    restart: unless-stopped
+    profiles:
+      - default
+      - reverse-proxy
+      - static-site
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Example backend services for reverse proxy
+  app-1:
+    image: nginx:1.25-alpine
+    container_name: app-1
+    expose:
+      - "80"
+    volumes:
+      - ./nginx/backend-apps/app1:/usr/share/nginx/html:ro
+    networks:
+      - backend-network
+    restart: unless-stopped
+    profiles:
+      - reverse-proxy
+      - ha
+
+  app-2:
+    image: nginx:1.25-alpine
+    container_name: app-2
+    expose:
+      - "80"
+    volumes:
+      - ./nginx/backend-apps/app2:/usr/share/nginx/html:ro
+    networks:
+      - backend-network
+    restart: unless-stopped
+    profiles:
+      - reverse-proxy
+      - ha
+
+  # Monitoring and Log aggregation
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:0.11
+    container_name: nginx-exporter
+    ports:
+      - "9113:9113"
+    command:
+      - --nginx.scrape-uri=http://nginx:8080/nginx_status
+    depends_on:
+      - nginx
+    networks:
+      - nginx-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Log collector (Fluent Bit)
+  fluent-bit:
+    image: fluent/fluent-bit:2.2
+    container_name: fluent-bit
+    volumes:
+      - nginx-logs:/var/log/nginx:ro
+      - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+    networks:
+      - nginx-network
+    restart: unless-stopped
+    profiles:
+      - logging

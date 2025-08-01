@@ -1,0 +1,127 @@
+######################## APM Server Configuration #########################
+
+################################ APM Server ################################
+
+apm-server:
+  # Defines the host and port the server is listening on
+  host: "0.0.0.0:8200"
+
+  # Maximum permitted size in bytes of a request's header accepted by the server
+  max_header_size: 1048576
+
+  # Maximum amount of time to wait for the next incoming request before underlying connection is closed
+  idle_timeout: 45s
+
+  # Maximum permitted duration for reading an entire request
+  read_timeout: 30s
+
+  # Maximum permitted duration for writing a response
+  write_timeout: 30s
+
+  # Maximum permitted size in bytes of an event accepted by the server
+  max_event_size: 307200
+
+  # Enable capture of personal data
+  capture_personal_data: false
+
+  # Default service environment to apply if no environment is specified in the event
+  default_service_environment: "development"
+
+  # Concurrent requests supported by the server
+  concurrent_requests: 40
+
+  # Authentication configuration
+  auth:
+    anonymous:
+      enabled: true
+      allow_agent: ["apm-js-base", "apm-agent-*"]
+      allow_service: ["*"]
+      rate_limit:
+        ip_limit: 1000
+        event_limit: 10000
+
+  # Rum configuration
+  rum:
+    enabled: true
+    event_rate:
+      limit: 300
+      lru_size: 1000
+    allow_origins: ["*"]
+    allow_headers: ["*"]
+    source_mapping:
+      enabled: true
+      cache:
+        expiration: 5m
+      index_pattern: "apm-*-sourcemap*"
+
+  # Sampling configuration  
+  sampling:
+    keep_unsampled: false
+
+#================================ General ================================
+
+# Data path where files will be stored
+path.data: /usr/share/apm-server/data
+
+# Logs path
+path.logs: /usr/share/apm-server/logs
+
+#============================== Dashboards ==============================
+setup.dashboards:
+  enabled: true
+  beat: apm-server
+  retry.enabled: true
+  retry.interval: 1s
+
+#============================== Kibana ==============================
+
+setup.kibana:
+  host: "kibana-apm:5601"
+
+#-------------------------- Elasticsearch Output -------------------------
+output.elasticsearch:
+  hosts: ["elasticsearch-apm:9200"]
+  
+  # Pipeline configuration
+  pipeline: apm
+  
+  # Template configuration
+  template:
+    enabled: true
+    pattern: "apm-*"
+    settings:
+      index.number_of_shards: 1
+      index.codec: best_compression
+      index.number_of_replicas: 0
+      index.mapping.total_fields.limit: 2000
+
+  # Index lifecycle management
+  ilm:
+    enabled: true
+    rollover_alias: "apm"
+    pattern: "000001"
+    policy: "apm-rollover-30-days"
+
+#================================ Processors ==============================
+# Processors not supported in APM Server 8.x
+
+#================================ Logging ==============================
+
+logging.level: info
+logging.selectors: ["*"]
+logging.metrics.enabled: false
+
+#============================== X-Pack Monitoring ==============================
+
+monitoring:
+  enabled: true
+  elasticsearch:
+    hosts: ["elasticsearch-apm:9200"]
+
+#============================== Instrumentation ==============================
+
+instrumentation:
+  enabled: true
+  environment: development
+  hosts: ["http://apm-server:8200"]
+  secret_token: ""

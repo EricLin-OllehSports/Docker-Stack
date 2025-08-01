@@ -1,0 +1,231 @@
+groups:
+  # =========================================
+  # SPRING BOOT APPLICATION ALERTS
+  # =========================================
+  - name: spring-boot-monitoring
+    rules:
+      # Application Health
+      - alert: SpringBootAppDown
+        expr: up{job=~"spring-boot.*|microservices"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: spring-boot
+        annotations:
+          summary: "Spring Boot application down"
+          description: "Spring Boot application {{ $labels.application }} ({{ $labels.instance }}) is down for more than 2 minutes"
+
+      - alert: SpringBootHealthCheckFailed
+        expr: spring_boot_health_status{status!="UP"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          category: spring-boot
+        annotations:
+          summary: "Spring Boot health check failed"
+          description: "Spring Boot application {{ $labels.application }} health check is {{ $labels.status }}"
+
+      # JVM Memory Alerts
+      - alert: SpringBootHighHeapUsage
+        expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-jvm
+        annotations:
+          summary: "High JVM heap usage"
+          description: "{{ $labels.application }} JVM heap usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: SpringBootOutOfMemory
+        expr: (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: spring-boot-jvm
+        annotations:
+          summary: "JVM heap usage critical"
+          description: "{{ $labels.application }} JVM heap usage is {{ $value }}% on {{ $labels.instance }}, approaching OOM"
+
+      - alert: SpringBootHighNonHeapUsage
+        expr: (jvm_memory_used_bytes{area="nonheap"} / jvm_memory_max_bytes{area="nonheap"}) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-jvm
+        annotations:
+          summary: "High JVM non-heap usage"
+          description: "{{ $labels.application }} JVM non-heap usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # Garbage Collection Alerts
+      - alert: SpringBootHighGCTime
+        expr: rate(jvm_gc_collection_seconds_sum[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-jvm
+        annotations:
+          summary: "High GC time"
+          description: "{{ $labels.application }} is spending {{ $value }}s per second in GC on {{ $labels.instance }}"
+
+      - alert: SpringBootFrequentGC
+        expr: rate(jvm_gc_collection_seconds_count[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-jvm
+        annotations:
+          summary: "Frequent garbage collection"
+          description: "{{ $labels.application }} has {{ $value }} GC events per second on {{ $labels.instance }}"
+
+      # Thread Alerts
+      - alert: SpringBootHighThreadCount
+        expr: jvm_threads_live_threads > 200
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-jvm
+        annotations:
+          summary: "High thread count"
+          description: "{{ $labels.application }} has {{ $value }} threads on {{ $labels.instance }}"
+
+      - alert: SpringBootDeadlockedThreads
+        expr: jvm_threads_deadlocked_threads > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: spring-boot-jvm
+        annotations:
+          summary: "Deadlocked threads detected"
+          description: "{{ $labels.application }} has {{ $value }} deadlocked threads on {{ $labels.instance }}"
+
+      # HTTP Request Alerts
+      - alert: SpringBootHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-http
+        annotations:
+          summary: "High HTTP response time"
+          description: "{{ $labels.application }} 95th percentile response time is {{ $value }}s for {{ $labels.uri }}"
+
+      - alert: SpringBootHighErrorRate
+        expr: (rate(http_server_requests_total{status=~"4..|5.."}[5m]) / rate(http_server_requests_total[5m])) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-http
+        annotations:
+          summary: "High HTTP error rate"
+          description: "{{ $labels.application }} error rate is {{ $value }}% for {{ $labels.uri }} on {{ $labels.instance }}"
+
+      - alert: SpringBoot5xxErrors
+        expr: rate(http_server_requests_total{status=~"5.."}[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          category: spring-boot-http
+        annotations:
+          summary: "High 5xx error rate"
+          description: "{{ $labels.application }} has {{ $value }} 5xx errors per second for {{ $labels.uri }}"
+
+      # Tomcat Specific Alerts
+      - alert: SpringBootTomcatHighThreadUsage
+        expr: (tomcat_threads_busy_threads / tomcat_threads_config_max_threads) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-tomcat
+        annotations:
+          summary: "High Tomcat thread usage"
+          description: "{{ $labels.application }} Tomcat thread usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: SpringBootTomcatSessionsHigh
+        expr: tomcat_sessions_active_current_sessions > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-tomcat
+        annotations:
+          summary: "High Tomcat active sessions"
+          description: "{{ $labels.application }} has {{ $value }} active sessions on {{ $labels.instance }}"
+
+      # Database Connection Pool Alerts
+      - alert: SpringBootHighDBConnections
+        expr: (hikaricp_connections_active / hikaricp_connections_max) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-db
+        annotations:
+          summary: "High database connection usage"
+          description: "{{ $labels.application }} database connection usage is {{ $value }}% on {{ $labels.instance }}"
+
+      - alert: SpringBootDBConnectionTimeout
+        expr: rate(hikaricp_connections_timeout_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          category: spring-boot-db
+        annotations:
+          summary: "Database connection timeouts"
+          description: "{{ $labels.application }} has {{ $value }} database connection timeouts per second on {{ $labels.instance }}"
+
+      # Custom Application Metrics Alerts
+      - alert: SpringBootCustomMetricHigh
+        expr: application_custom_metric > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: spring-boot-custom
+        annotations:
+          summary: "Custom application metric high"
+          description: "{{ $labels.application }} custom metric {{ $labels.__name__ }} is {{ $value }} on {{ $labels.instance }}"
+
+      # Cache Alerts (if using Spring Cache)
+      - alert: SpringBootCacheHitRateLow
+        expr: (cache_gets{result="hit"} / (cache_gets{result="hit"} + cache_gets{result="miss"})) * 100 < 80
+        for: 10m
+        labels:
+          severity: warning
+          category: spring-boot-cache
+        annotations:
+          summary: "Low cache hit rate"
+          description: "{{ $labels.application }} cache {{ $labels.cache }} hit rate is {{ $value }}% on {{ $labels.instance }}"
+
+
+
+  # =========================================
+  # MICROSERVICE COMMUNICATION ALERTS
+  # =========================================
+  - name: microservice-communication
+    rules:
+      - alert: MicroserviceCircuitBreakerOpen
+        expr: resilience4j_circuitbreaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          category: microservice-resilience
+        annotations:
+          summary: "Circuit breaker open"
+          description: "Circuit breaker {{ $labels.name }} is OPEN in {{ $labels.application }}"
+
+      - alert: MicroserviceHighRetryRate
+        expr: rate(resilience4j_retry_calls_total{kind="successful_with_retry"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: microservice-resilience
+        annotations:
+          summary: "High retry rate"
+          description: "{{ $labels.application }} has high retry rate {{ $value }}/s for {{ $labels.name }}"
+
+      - alert: MicroserviceRateLimiterReject
+        expr: rate(resilience4j_ratelimiter_calls_total{kind="rejected"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: microservice-resilience
+        annotations:
+          summary: "Rate limiter rejecting requests"
+          description: "{{ $labels.application }} rate limiter {{ $labels.name }} is rejecting {{ $value }} requests/s"

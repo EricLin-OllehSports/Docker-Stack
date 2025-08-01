@@ -1,0 +1,476 @@
+version: '3.8'
+
+# Unified Monitoring for ALL Docker Stack Complete Components
+# This configuration monitors ALL services across the entire Docker Stack Complete
+
+networks:
+  monitoring:
+    driver: bridge
+    external: false
+  # External networks to connect to other stacks
+  redis-network:
+    external: true
+    name: redis-docker-compose-full_redis-network
+  mysql-network:
+    external: true
+    name: mysql-docker-compose-full_mysql-network
+  mongo-network:
+    external: true
+    name: mongo-docker-compose-full_mongo-network
+  kafka-network:
+    external: true
+    name: kafka-docker-compose-full_default
+  rabbitmq-network:
+    external: true
+    name: rabbitmq-docker-compose-full_default
+  nginx-network:
+    external: true
+    name: nginx-docker-compose-full_default
+  elastic-network:
+    external: true
+    name: elastic-docker-compose-full_elastic
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+
+services:
+  # =========================================
+  # CORE MONITORING STACK
+  # =========================================
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: unified-prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - redis-network
+      - mysql-network
+      - mongo-network
+      - kafka-network
+      - rabbitmq-network
+      - nginx-network
+      - elastic-network
+    volumes:
+      - ./prometheus/prometheus-unified.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--web.external-url=http://localhost:9090'
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: unified-grafana
+    restart: unless-stopped
+    networks:
+      - monitoring
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel,redis-datasource
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: unified-alertmanager
+    restart: unless-stopped
+    networks:
+      - monitoring
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+
+  # =========================================
+  # SYSTEM MONITORING
+  # =========================================
+  node_exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: unified-node-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: unified-cadvisor
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    privileged: true
+    command:
+      - '--housekeeping_interval=30s'
+      - '--docker_only=true'
+
+  # =========================================
+  # REDIS MONITORING (All Redis Modes)
+  # =========================================
+  redis_exporter_single:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis-exporter-single
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - redis-network
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-single:6379
+    profiles:
+      - redis-single
+      - redis-all
+      - all
+
+  redis_exporter_master:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis-exporter-master
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - redis-network
+    ports:
+      - "9122:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-master:6379
+    profiles:
+      - redis-replication
+      - redis-all
+      - all
+
+  redis_exporter_sentinel:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis-exporter-sentinel
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - redis-network
+    ports:
+      - "9123:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-sentinel-master:6379
+    profiles:
+      - redis-sentinel
+      - redis-all
+      - all
+
+  redis_exporter_cluster:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis-exporter-cluster
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - redis-network
+    ports:
+      - "9124:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-cluster-node-1:6379
+    profiles:
+      - redis-cluster
+      - redis-all
+      - all
+
+  # =========================================
+  # MYSQL MONITORING (All MySQL Modes)
+  # =========================================
+  mysql_exporter_single:
+    image: prom/mysqld-exporter:v0.15.0
+    container_name: mysql-exporter-single
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - mysql-network
+    ports:
+      - "9104:9104"
+    environment:
+      - DATA_SOURCE_NAME=root:root@(mysql-single:3306)/
+    profiles:
+      - mysql-single
+      - mysql-all
+      - all
+
+  mysql_exporter_master:
+    image: prom/mysqld-exporter:v0.15.0
+    container_name: mysql-exporter-master
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - mysql-network
+    ports:
+      - "9105:9104"
+    environment:
+      - DATA_SOURCE_NAME=root:root@(mysql-master:3306)/
+    profiles:
+      - mysql-replication
+      - mysql-all
+      - all
+
+  mysql_exporter_slave:
+    image: prom/mysqld-exporter:v0.15.0
+    container_name: mysql-exporter-slave
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - mysql-network
+    ports:
+      - "9106:9104"
+    environment:
+      - DATA_SOURCE_NAME=root:root@(mysql-slave:3306)/
+    profiles:
+      - mysql-replication
+      - mysql-all
+      - all
+
+  # =========================================
+  # MONGODB MONITORING (All MongoDB Modes)
+  # =========================================
+  mongodb_exporter_single:
+    image: bitnami/mongodb-exporter:0.40.0
+    container_name: mongodb-exporter-single
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - mongo-network
+    ports:
+      - "9216:9216"
+    environment:
+      - MONGODB_URI=mongodb://root:rootpassword@mongo-single:27017/admin
+    profiles:
+      - mongo-single
+      - mongo-all
+      - all
+
+  mongodb_exporter_replica:
+    image: bitnami/mongodb-exporter:0.40.0
+    container_name: mongodb-exporter-replica
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - mongo-network
+    ports:
+      - "9217:9216"
+    environment:
+      - MONGODB_URI=mongodb://root:rootpassword@mongo-primary:27017/admin
+    profiles:
+      - mongo-replica
+      - mongo-all
+      - all
+
+  mongodb_exporter_sharded:
+    image: bitnami/mongodb-exporter:0.40.0
+    container_name: mongodb-exporter-sharded
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - mongo-network
+    ports:
+      - "9218:9216"
+    environment:
+      - MONGODB_URI=mongodb://mongo-router:27017/admin
+    profiles:
+      - mongo-sharded
+      - mongo-all
+      - all
+
+  # =========================================
+  # KAFKA MONITORING
+  # =========================================
+  kafka_exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: kafka-exporter-unified
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - kafka-network
+    ports:
+      - "9308:9308"
+    command:
+      - '--kafka.server=kafka:9092'
+    profiles:
+      - kafka
+      - all
+
+  # =========================================
+  # RABBITMQ MONITORING
+  # =========================================
+  rabbitmq_exporter:
+    image: kbudde/rabbitmq-exporter:latest
+    container_name: rabbitmq-exporter-unified
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - rabbitmq-network
+    ports:
+      - "9419:9419"
+    environment:
+      - RABBIT_URL=http://rabbitmq:15672
+      - RABBIT_USER=admin
+      - RABBIT_PASSWORD=admin
+    profiles:
+      - rabbitmq
+      - all
+
+  # =========================================
+  # NGINX MONITORING
+  # =========================================
+  nginx_exporter:
+    image: nginx/nginx-prometheus-exporter:0.11.0
+    container_name: nginx-exporter-unified
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - nginx-network
+    ports:
+      - "9113:9113"
+    command:
+      - '-nginx.scrape-uri=http://nginx:80/nginx_status'
+    profiles:
+      - nginx
+      - all
+
+  # =========================================
+  # ELASTICSEARCH MONITORING
+  # =========================================
+  elasticsearch_exporter:
+    image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.6.0
+    container_name: elasticsearch-exporter-unified
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - elastic-network
+    ports:
+      - "9114:9114"
+    command:
+      - '--es.uri=http://elasticsearch:9200'
+    profiles:
+      - elasticsearch
+      - all
+
+  # =========================================
+  # APM MONITORING
+  # =========================================
+  apm_server_exporter:
+    image: elastic/apm-server:8.11.0
+    container_name: apm-server-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - elastic-network
+    ports:
+      - "8200:8200"
+    environment:
+      - output.elasticsearch.hosts=["elasticsearch:9200"]
+    profiles:
+      - apm
+      - all
+
+  # =========================================
+  # FLUENT-BIT MONITORING (for Nginx logs)
+  # =========================================
+  fluent_bit_exporter:
+    image: fluent/fluent-bit:2.1.10
+    container_name: fluent-bit-exporter
+    restart: unless-stopped
+    networks:
+      - monitoring
+      - nginx-network
+    ports:
+      - "2020:2020"
+    volumes:
+      - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+    profiles:
+      - nginx-logging
+      - all
+
+  # =========================================
+  # SPRING BOOT DEMO APPLICATIONS
+  # =========================================
+  
+  # Demo Spring Boot Application 1
+  spring-app-1:
+    image: springio/gs-spring-boot-docker:latest
+    container_name: spring-app-1
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "8081:8080"
+    environment:
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics,prometheus
+      - MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED=true
+      - MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED=true
+      - MANAGEMENT_SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=spring-demo-app-1
+    profiles:
+      - spring-boot-demo
+      - all
+
+  # Demo Spring Boot Application 2
+  spring-app-2:
+    image: springio/gs-spring-boot-docker:latest
+    container_name: spring-app-2
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "8082:8080"
+    environment:
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics,prometheus
+      - MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED=true
+      - MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED=true
+      - MANAGEMENT_SERVER_PORT=8080
+      - SPRING_APPLICATION_NAME=spring-demo-app-2
+    profiles:
+      - spring-boot-demo
+      - all
+
+  # Spring Boot Admin Server (for monitoring Spring Boot apps)
+  spring-boot-admin:
+    image: codecentric/spring-boot-admin:3.1.8
+    container_name: spring-boot-admin
+    restart: unless-stopped
+    networks:
+      - monitoring
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_BOOT_ADMIN_CLIENT_URL=http://spring-boot-admin:8080
+      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=*
+    profiles:
+      - spring-boot-admin
+      - all

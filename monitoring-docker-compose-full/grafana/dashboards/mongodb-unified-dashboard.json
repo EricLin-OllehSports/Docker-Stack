@@ -1,0 +1,180 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "MongoDB Unified Monitoring - All Modes",
+    "tags": ["mongodb", "unified", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "mongodb_mode",
+          "type": "query",
+          "query": "label_values(mongodb_up, mongodb_mode)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(mongodb_up{mongodb_mode=~\"$mongodb_mode\"}, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "MongoDB Instances Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "mongodb_up{mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mongodb_mode}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mongodb_connections{state=\"current\", mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - Current",
+            "refId": "A"
+          },
+          {
+            "expr": "mongodb_connections{state=\"available\", mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - Available",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 3,
+        "title": "Operations per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mongodb_opcounters_total{mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - {{type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yAxes": [{"unit": "ops"}]
+      },
+      {
+        "id": 4,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mongodb_memory{type=\"resident\", mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - Resident",
+            "refId": "A"
+          },
+          {
+            "expr": "mongodb_memory{type=\"virtual\", mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - Virtual",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 5,
+        "title": "Document Operations",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mongodb_metrics_document_total{mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - {{state}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Replica Set Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "mongodb_mongod_replset_member_state{mongodb_mode=\"replica\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "A"
+          },
+          {
+            "expr": "mongodb_mongod_replset_member_replication_lag{mongodb_mode=\"replica\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "Sharded Cluster Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "mongodb_mongos_sharding_chunks_total{mongodb_mode=\"sharded\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      },
+      {
+        "id": 8,
+        "title": "Index Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(mongodb_metrics_query_executor_total{mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - {{state}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      },
+      {
+        "id": 9,
+        "title": "WiredTiger Cache",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "mongodb_mongod_wiredtiger_cache_bytes{mongodb_mode=~\"$mongodb_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{mongodb_mode}}) - {{type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40},
+        "yAxes": [{"unit": "bytes"}]
+      }
+    ]
+  }
+}

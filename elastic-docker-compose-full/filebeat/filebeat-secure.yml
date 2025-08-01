@@ -1,0 +1,19 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/lib/docker/containers/*/*.log
+
+output.logstash:
+  hosts: ["logstash:5000"]
+
+ssl.certificate_authorities: ["/usr/share/filebeat/certs/ca/ca.crt"]
+ssl.verification_mode: certificate
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644

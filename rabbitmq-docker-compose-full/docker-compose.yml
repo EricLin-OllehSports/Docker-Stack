@@ -1,0 +1,220 @@
+# =======================================================
+# RabbitMQ Docker Compose - Complete Multi-Mode Setup
+# =======================================================
+# 
+# This configuration provides three RabbitMQ deployment modes:
+# 
+# 1. Single Instance:     docker-compose --profile single up -d
+#    - Port: 5672 (AMQP), 15672 (Management)
+#    - Use case: Development, testing
+# 
+# 2. Dual Cluster:        docker-compose --profile cluster up -d
+#    - Node1: 5673/15673, Node2: 5674/15674
+#    - Use case: High availability, testing cluster features
+# 
+# 3. HA Cluster:          docker-compose --profile production up -d
+#    - 3 nodes + HAProxy load balancer
+#    - Ports: 5672/15672 (via HAProxy), 8404 (HAProxy stats)
+#    - Use case: Production, high availability, load balancing
+# 
+# Data volumes: ${HOME}/container-data/rabbitmq/
+# =======================================================
+
+networks:
+  rabbitmq-network:
+    driver: bridge
+
+services:
+  # ========================================
+  # Single Instance Mode
+  # ========================================
+  rabbitmq-single:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-single
+    hostname: rabbitmq-single
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-admin123}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-/}
+    volumes:
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/single/data:/var/lib/rabbitmq"
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/single/logs:/var/log/rabbitmq"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - rabbitmq-network
+    profiles:
+      - single
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ========================================
+  # Dual Node Cluster Mode
+  # ========================================
+  rabbitmq-cluster-1:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-cluster-1
+    hostname: rabbitmq-cluster-1
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-my-secret-cookie-for-cluster}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-admin123}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-/}
+    volumes:
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/cluster/node-1/data:/var/lib/rabbitmq"
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/cluster/node-1/logs:/var/log/rabbitmq"
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    networks:
+      - rabbitmq-network
+    profiles:
+      - cluster
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  rabbitmq-cluster-2:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-cluster-2
+    hostname: rabbitmq-cluster-2
+    depends_on:
+      rabbitmq-cluster-1:
+        condition: service_healthy
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-my-secret-cookie-for-cluster}
+    volumes:
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/cluster/node-2/data:/var/lib/rabbitmq"
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/cluster/node-2/logs:/var/log/rabbitmq"
+      - "./scripts/cluster-entrypoint.sh:/usr/local/bin/cluster-entrypoint.sh:ro"
+    ports:
+      - "5674:5672"
+      - "15674:15672"
+    networks:
+      - rabbitmq-network
+    profiles:
+      - cluster
+    entrypoint: /usr/local/bin/cluster-entrypoint.sh
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ========================================
+  # High Availability Cluster Mode
+  # ========================================
+  rabbitmq-ha-1:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-ha-1
+    hostname: rabbitmq-ha-1
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-my-secret-cookie-for-cluster}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-admin123}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-/}
+    volumes:
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/ha-cluster/node-1/data:/var/lib/rabbitmq"
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/ha-cluster/node-1/logs:/var/log/rabbitmq"
+    networks:
+      - rabbitmq-network
+    profiles:
+      - production
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  rabbitmq-ha-2:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-ha-2
+    hostname: rabbitmq-ha-2
+    depends_on:
+      rabbitmq-ha-1:
+        condition: service_healthy
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-my-secret-cookie-for-cluster}
+    volumes:
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/ha-cluster/node-2/data:/var/lib/rabbitmq"
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/ha-cluster/node-2/logs:/var/log/rabbitmq"
+      - "./scripts/ha-cluster-entrypoint.sh:/usr/local/bin/ha-cluster-entrypoint.sh:ro"
+    networks:
+      - rabbitmq-network
+    profiles:
+      - production
+    entrypoint: /usr/local/bin/ha-cluster-entrypoint.sh
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  rabbitmq-ha-3:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-ha-3
+    hostname: rabbitmq-ha-3
+    depends_on:
+      rabbitmq-ha-1:
+        condition: service_healthy
+      rabbitmq-ha-2:
+        condition: service_healthy
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-my-secret-cookie-for-cluster}
+    volumes:
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/ha-cluster/node-3/data:/var/lib/rabbitmq"
+      - "${DATA_PATH:-${HOME}/container-data/rabbitmq}/ha-cluster/node-3/logs:/var/log/rabbitmq"
+      - "./scripts/ha-cluster-entrypoint.sh:/usr/local/bin/ha-cluster-entrypoint.sh:ro"
+    networks:
+      - rabbitmq-network
+    profiles:
+      - production
+    entrypoint: /usr/local/bin/ha-cluster-entrypoint.sh
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ========================================
+  # HAProxy Load Balancer
+  # ========================================
+  rabbitmq-haproxy:
+    image: haproxy:2.8-alpine
+    container_name: rabbitmq-haproxy
+    depends_on:
+      rabbitmq-ha-1:
+        condition: service_healthy
+      rabbitmq-ha-2:
+        condition: service_healthy
+      rabbitmq-ha-3:
+        condition: service_healthy
+    volumes:
+      - "./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+      - "8404:8404"
+    networks:
+      - rabbitmq-network
+    profiles:
+      - production
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8404"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s

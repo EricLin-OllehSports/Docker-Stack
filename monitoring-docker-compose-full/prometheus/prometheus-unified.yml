@@ -1,0 +1,427 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'docker-stack-complete'
+    replica: 'unified-monitoring'
+
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # =========================================
+  # CORE MONITORING SERVICES
+  # =========================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['unified-grafana:3000']
+    scrape_interval: 30s
+
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['unified-alertmanager:9093']
+    scrape_interval: 30s
+
+  # =========================================
+  # SYSTEM MONITORING
+  # =========================================
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['unified-node-exporter:9100']
+    scrape_interval: 15s
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['unified-cadvisor:8080']
+    scrape_interval: 30s
+
+  # =========================================
+  # REDIS MONITORING (All Modes)
+  # =========================================
+  - job_name: 'redis-single'
+    static_configs:
+      - targets: ['redis-exporter-single:9121']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: redis_mode
+        replacement: 'single'
+
+  - job_name: 'redis-master-slave'
+    static_configs:
+      - targets: 
+          - 'redis-exporter-master:9121'
+          - 'redis-exporter-slave:9121'
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: 'redis-exporter-master:9121'
+        target_label: redis_role
+        replacement: 'master'
+      - source_labels: [__address__]
+        regex: 'redis-exporter-slave:9121'
+        target_label: redis_role
+        replacement: 'slave'
+
+  - job_name: 'redis-sentinel'
+    static_configs:
+      - targets: ['redis-exporter-sentinel:9121']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: redis_mode
+        replacement: 'sentinel'
+
+  - job_name: 'redis-cluster'
+    static_configs:
+      - targets: ['redis-exporter-cluster:9121']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: redis_mode
+        replacement: 'cluster'
+
+  # =========================================
+  # MYSQL MONITORING (All Modes)
+  # =========================================
+  - job_name: 'mysql-single'
+    static_configs:
+      - targets: ['mysql-exporter-single:9104']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: mysql_mode
+        replacement: 'single'
+
+  - job_name: 'mysql-replication'
+    static_configs:
+      - targets: 
+          - 'mysql-exporter-master:9104'
+          - 'mysql-exporter-slave:9104'
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: 'mysql-exporter-master:9104'
+        target_label: mysql_role
+        replacement: 'master'
+      - source_labels: [__address__]
+        regex: 'mysql-exporter-slave:9104'
+        target_label: mysql_role
+        replacement: 'slave'
+
+  # =========================================
+  # MONGODB MONITORING (All Modes)
+  # =========================================
+  - job_name: 'mongodb-single'
+    static_configs:
+      - targets: ['mongodb-exporter-single:9216']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: mongodb_mode
+        replacement: 'single'
+
+  - job_name: 'mongodb-replica'
+    static_configs:
+      - targets: ['mongodb-exporter-replica:9216']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: mongodb_mode
+        replacement: 'replica'
+
+  - job_name: 'mongodb-sharded'
+    static_configs:
+      - targets: ['mongodb-exporter-sharded:9216']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: mongodb_mode
+        replacement: 'sharded'
+
+  # =========================================
+  # MESSAGE QUEUE MONITORING
+  # =========================================
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-exporter-unified:9308']
+    scrape_interval: 30s
+
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq-exporter-unified:9419']
+    scrape_interval: 30s
+
+  # =========================================
+  # WEB SERVER MONITORING
+  # =========================================
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter-unified:9113']
+    scrape_interval: 30s
+
+  # =========================================
+  # SEARCH ENGINE MONITORING
+  # =========================================
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch-exporter-unified:9114']
+    scrape_interval: 30s
+
+  # =========================================
+  # APM MONITORING
+  # =========================================
+  - job_name: 'apm-server'
+    static_configs:
+      - targets: ['apm-server-exporter:8200']
+    scrape_interval: 30s
+    metrics_path: '/stats'
+
+  # =========================================
+  # LOG MONITORING
+  # =========================================
+  - job_name: 'fluent-bit'
+    static_configs:
+      - targets: ['fluent-bit-exporter:2020']
+    scrape_interval: 30s
+    metrics_path: '/api/v1/metrics/prometheus'
+
+  # =========================================
+  # DIRECT SERVICE MONITORING
+  # =========================================
+  - job_name: 'redis-direct-single'
+    static_configs:
+      - targets: ['redis-single:6379']
+    scrape_interval: 60s
+    metrics_path: '/metrics'
+    scheme: 'http'
+
+  - job_name: 'mysql-direct-single'
+    static_configs:
+      - targets: ['mysql-single:3306']
+    scrape_interval: 60s
+    params:
+      auth_module: [mysql]
+
+  - job_name: 'mongodb-direct-single'
+    static_configs:
+      - targets: ['mongo-single:27017']
+    scrape_interval: 60s
+    params:
+      collect[]: ['database_stats', 'collection_stats', 'index_stats']
+
+  # =========================================
+  # SPRING BOOT APPLICATIONS MONITORING
+  # =========================================
+  
+  # Spring Boot Actuator - Static Configuration
+  - job_name: 'spring-boot-apps'
+    static_configs:
+      - targets: 
+          - 'spring-app-1:8080'
+          - 'spring-app-2:8080'
+          - 'spring-app-3:9090'
+          - 'order-service:8080'
+          - 'user-service:8080'
+          - 'payment-service:8080'
+          - 'notification-service:8080'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: application
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: '${1}'
+      - target_label: stack_type
+        replacement: 'spring-boot'
+    # Optional: Add basic auth if secured
+    # basic_auth:
+    #   username: 'actuator'
+    #   password: 'password'
+
+  # Spring Boot Actuator - Service Discovery via DNS
+  - job_name: 'spring-boot-discovery'
+    dns_sd_configs:
+      - names:
+          - 'spring-apps.local'
+          - 'microservices.local'
+        type: 'A'
+        port: 8080
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: service_name
+      - source_labels: [__address__]
+        target_label: application
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - target_label: discovery_type
+        replacement: 'dns'
+
+  # Spring Boot Actuator - Docker Swarm Service Discovery
+  - job_name: 'spring-boot-swarm'
+    static_configs:
+      - targets: 
+          - 'tasks.spring-app:8080'
+          - 'tasks.microservice-stack:8080'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        regex: 'tasks\.([^:]+):.*'
+        replacement: '${1}'
+      - target_label: deployment_type
+        replacement: 'docker-swarm'
+
+
+  # Spring Boot Actuator - JVM-focused Monitoring
+  - job_name: 'spring-boot-jvm'
+    static_configs:
+      - targets:
+          - 'spring-app-1:8080'
+          - 'spring-app-2:8080'
+          - 'order-service:8080'
+          - 'user-service:8080'
+    scrape_interval: 30s
+    metrics_path: /actuator/prometheus
+    metric_relabel_configs:
+      # Focus on JVM, process, and system metrics
+      - source_labels: [__name__]
+        regex: 'jvm_.*|process_.*|system_.*|tomcat_.*|http_server_.*'
+        action: keep
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: application
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - target_label: metrics_focus
+        replacement: 'jvm'
+
+
+  # Spring Boot with Custom Management Port
+  - job_name: 'spring-boot-management'
+    static_configs:
+      - targets: 
+          - 'spring-app-mgmt:9001'
+          - 'spring-app-2-mgmt:9001'
+          - 'order-service-mgmt:9001'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: application
+        regex: '([^-]+)-.*'
+        replacement: '${1}'
+      - target_label: management_port
+        replacement: 'true'
+
+  # Spring Boot Actuator - Health Endpoints
+  - job_name: 'spring-boot-health'
+    static_configs:
+      - targets: 
+          - 'spring-app-1:8080'
+          - 'spring-app-2:8080'
+          - 'order-service:8080'
+          - 'user-service:8080'
+    scrape_interval: 30s
+    metrics_path: /actuator/health
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: application
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - target_label: endpoint_type
+        replacement: 'health'
+
+  # Spring Boot Actuator - Custom Application Metrics
+  - job_name: 'spring-boot-custom'
+    static_configs:
+      - targets:
+          - 'spring-app-1:8080'
+          - 'spring-app-2:8080'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    metric_relabel_configs:
+      # Only collect custom application metrics (exclude JVM/system)
+      - source_labels: [__name__]
+        regex: 'jvm_.*|process_.*|system_.*|tomcat_.*'
+        action: drop
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: application
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - target_label: metrics_type
+        replacement: 'custom'
+
+  # Spring Boot Microservices Pattern
+  - job_name: 'microservices'
+    static_configs:
+      - targets:
+          - 'user-service:8080'
+          - 'order-service:8080'
+          - 'payment-service:8080'
+          - 'inventory-service:8080'
+          - 'notification-service:8080'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - source_labels: [__address__]
+        target_label: application
+        regex: '([^-]+)-.*'
+        replacement: '${1}'
+      - target_label: architecture
+        replacement: 'microservices'
+
+  # =========================================
+  # HEALTH CHECK MONITORING
+  # =========================================
+  - job_name: 'blackbox-health-checks'
+    static_configs:
+      - targets:
+          - http://redis-single:6379
+          - http://mysql-single:3306  
+          - http://mongo-single:27017
+          - http://elasticsearch:9200
+          - http://kibana:5601
+          - http://kafka:9092
+          - http://rabbitmq:15672
+          - http://nginx:80
+          # Spring Boot health checks
+          - http://spring-app-1:8080/actuator/health
+          - http://spring-app-2:8080/actuator/health
+          - http://order-service:8080/actuator/health
+          - http://user-service:8080/actuator/health
+    scrape_interval: 30s
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

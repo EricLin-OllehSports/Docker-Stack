@@ -1,0 +1,150 @@
+receivers:
+  # OTLP 接收器 - 接收來自應用程式的遙測數據
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # Prometheus 接收器 - 抓取 Prometheus 格式的指標
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['localhost:8888']
+
+  # Zipkin 接收器 - 接收 Zipkin 格式的追踪數據
+  zipkin:
+    endpoint: 0.0.0.0:9411
+
+  # Jaeger 接收器 - 接收 Jaeger 格式的追踪數據
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:14250
+      thrift_binary:
+        endpoint: 0.0.0.0:6832
+      thrift_compact:
+        endpoint: 0.0.0.0:6831
+      thrift_http:
+        endpoint: 0.0.0.0:14268
+
+processors:
+  # 批次處理器 - 提高效能
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # 記憶體限制器 - 防止 OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # 資源處理器 - 添加資源屬性
+  resource:
+    attributes:
+      - key: environment
+        value: production
+        action: insert
+      - key: service.namespace
+        value: trace-system
+        action: insert
+
+  # 屬性處理器 - 處理和轉換屬性
+  attributes:
+    actions:
+      - key: http.user_agent
+        action: delete
+      - key: http.request.header.authorization
+        action: delete
+
+  # 過濾處理器 - 過濾不需要的數據
+  filter:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.target"] == "/health"'
+        - 'attributes["http.target"] == "/metrics"'
+
+exporters:
+  # Jaeger 導出器
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+  # Zipkin 導出器
+  zipkin:
+    endpoint: http://zipkin:9411/api/v2/spans
+    format: proto
+
+  # Prometheus 導出器
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    const_labels:
+      collector: "opentelemetry"
+
+  # OTLP 導出器 - 可用於導出到其他 OTLP 兼容的後端
+  otlp:
+    endpoint: localhost:4317
+    tls:
+      insecure: true
+
+  # 調試導出器 - 用於開發和調試
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  # 健康檢查
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # 性能分析
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # zPages
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  # 記憶體監控
+  memory_ballast:
+    size_mib: 128
+
+service:
+  extensions: [health_check, pprof, zpages, memory_ballast]
+  
+  pipelines:
+    # 追踪管道
+    traces:
+      receivers: [otlp, jaeger, zipkin]
+      processors: [memory_limiter, batch, resource, attributes, filter]
+      exporters: [jaeger, debug]
+    
+    # 指標管道
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, batch, resource]
+      exporters: [prometheus]
+    
+    # 日誌管道
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [debug]
+
+  telemetry:
+    logs:
+      level: info
+      development: false
+      encoding: json
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888

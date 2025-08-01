@@ -1,0 +1,191 @@
+# ========================================================
+# Elasticsearch Docker Compose - 3-Node Cluster Setup
+# ========================================================
+# 
+# This configuration provides a 3-node Elasticsearch cluster with:
+# - High availability setup
+# - Distributed data storage
+# - Automatic cluster discovery
+# 
+# Usage: docker-compose -f docker-compose-cluster.yml up -d
+# Kibana: http://localhost:5601
+# Elasticsearch: http://localhost:9200, 9201, 9202
+# ========================================================
+
+networks:
+  elastic-cluster:
+    driver: bridge
+
+volumes:
+  es-data-01:
+  es-data-02:
+  es-data-03:
+
+services:
+  elasticsearch-01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch-01
+    environment:
+      - node.name=elasticsearch-01
+      - cluster.name=elastic-cluster
+      - discovery.seed_hosts=elasticsearch-02,elasticsearch-03
+      - cluster.initial_master_nodes=elasticsearch-01,elasticsearch-02,elasticsearch-03
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+      - xpack.monitoring.collection.enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data-01:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - elastic-cluster
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  elasticsearch-02:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch-02
+    environment:
+      - node.name=elasticsearch-02
+      - cluster.name=elastic-cluster
+      - discovery.seed_hosts=elasticsearch-01,elasticsearch-03
+      - cluster.initial_master_nodes=elasticsearch-01,elasticsearch-02,elasticsearch-03
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+      - xpack.monitoring.collection.enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data-02:/usr/share/elasticsearch/data
+    ports:
+      - "9201:9200"
+    networks:
+      - elastic-cluster
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  elasticsearch-03:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch-03
+    environment:
+      - node.name=elasticsearch-03
+      - cluster.name=elastic-cluster
+      - discovery.seed_hosts=elasticsearch-01,elasticsearch-02
+      - cluster.initial_master_nodes=elasticsearch-01,elasticsearch-02,elasticsearch-03
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - xpack.security.enabled=false
+      - xpack.monitoring.collection.enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es-data-03:/usr/share/elasticsearch/data
+    ports:
+      - "9202:9200"
+    networks:
+      - elastic-cluster
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    container_name: kibana-cluster
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: "http://elasticsearch-01:9200,http://elasticsearch-02:9200,http://elasticsearch-03:9200"
+      SERVER_NAME: kibana-cluster
+      SERVER_HOST: "0.0.0.0"
+    networks:
+      - elastic-cluster
+    depends_on:
+      elasticsearch-01:
+        condition: service_healthy
+      elasticsearch-02:
+        condition: service_healthy
+      elasticsearch-03:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.0
+    container_name: logstash-cluster
+    ports:
+      - "5002:5000/tcp"
+      - "5001:5001/tcp"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logs/app:/usr/share/logstash/app-logs:ro
+    environment:
+      - LS_JAVA_OPTS=-Xmx512m -Xms512m
+      - PIPELINE_WORKERS=2
+      - XPACK_MONITORING_ENABLED=false
+    networks:
+      - elastic-cluster
+    depends_on:
+      elasticsearch-01:
+        condition: service_healthy
+      elasticsearch-02:
+        condition: service_healthy
+      elasticsearch-03:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600/_node/stats || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.0
+    container_name: filebeat-cluster
+    user: root
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/filebeat:/usr/share/filebeat/data
+    networks:
+      - elastic-cluster
+    depends_on:
+      logstash:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "filebeat test config -c /usr/share/filebeat/filebeat.yml"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped

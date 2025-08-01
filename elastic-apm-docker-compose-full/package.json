@@ -1,0 +1,16 @@
+{
+  "name": "elastic-apm-test",
+  "version": "1.0.0",
+  "description": "Test application for Elastic APM",
+  "main": "test-apm.js",
+  "scripts": {
+    "test": "node test-apm.js",
+    "start": "node test-apm.js"
+  },
+  "dependencies": {
+    "elastic-apm-node": "^4.0.0"
+  },
+  "keywords": ["elastic", "apm", "monitoring", "test"],
+  "author": "APM Test Suite",
+  "license": "MIT"
+}

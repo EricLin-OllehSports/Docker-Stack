@@ -1,0 +1,359 @@
+networks:
+  kafka-network:
+    driver: bridge
+
+services:
+  # ─────────────────────────────────────────
+  # Zookeeper 單機模式
+  # ─────────────────────────────────────────
+  zookeeper-single:
+    image: zookeeper:3.8
+    container_name: zookeeper-single
+    hostname: zookeeper-single
+    environment:
+      ZOO_4LW_COMMANDS_WHITELIST: "*"
+    volumes:
+      - "${HOME}/container-data/zookeeper/single/data:/data"
+      - "${HOME}/container-data/zookeeper/single/datalog:/datalog"
+      - "${HOME}/container-data/zookeeper/single/logs:/logs"
+    ports:
+      - "2181:2181"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - single
+    healthcheck:
+      test: ["CMD-SHELL", "echo stat | nc localhost 2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # Zookeeper 集群模式 - Node 1
+  # ─────────────────────────────────────────
+  zookeeper-1:
+    image: zookeeper:3.8
+    container_name: zookeeper-1
+    hostname: zookeeper-1
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181
+      ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+      ZOO_PORT: 2181
+      ZOO_AUTOPURGE_PURGEINTERVAL: 1
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: 3
+    volumes:
+      - "${HOME}/container-data/zookeeper/cluster/node-1/data:/data"
+      - "${HOME}/container-data/zookeeper/cluster/node-1/datalog:/datalog"
+      - "${HOME}/container-data/zookeeper/cluster/node-1/logs:/logs"
+    ports:
+      - "2181:2181"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - cluster
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─────────────────────────────────────────
+  # Zookeeper 集群模式 - Node 2
+  # ─────────────────────────────────────────
+  zookeeper-2:
+    image: zookeeper:3.8
+    container_name: zookeeper-2
+    hostname: zookeeper-2
+    environment:
+      ZOO_MY_ID: 2
+      ZOO_SERVERS: server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181
+      ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+      ZOO_PORT: 2181
+      ZOO_AUTOPURGE_PURGEINTERVAL: 1
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: 3
+    volumes:
+      - "${HOME}/container-data/zookeeper/cluster/node-2/data:/data"
+      - "${HOME}/container-data/zookeeper/cluster/node-2/datalog:/datalog"
+      - "${HOME}/container-data/zookeeper/cluster/node-2/logs:/logs"
+    ports:
+      - "2182:2181"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - cluster
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─────────────────────────────────────────
+  # Zookeeper 集群模式 - Node 3
+  # ─────────────────────────────────────────
+  zookeeper-3:
+    image: zookeeper:3.8
+    container_name: zookeeper-3
+    hostname: zookeeper-3
+    environment:
+      ZOO_MY_ID: 3
+      ZOO_SERVERS: server.1=zookeeper-1:2888:3888;2181 server.2=zookeeper-2:2888:3888;2181 server.3=zookeeper-3:2888:3888;2181
+      ZOO_4LW_COMMANDS_WHITELIST: mntr,conf,ruok
+      ZOO_PORT: 2181
+      ZOO_AUTOPURGE_PURGEINTERVAL: 1
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: 3
+    volumes:
+      - "${HOME}/container-data/zookeeper/cluster/node-3/data:/data"
+      - "${HOME}/container-data/zookeeper/cluster/node-3/datalog:/datalog"
+      - "${HOME}/container-data/zookeeper/cluster/node-3/logs:/logs"
+    ports:
+      - "2183:2181"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - cluster
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─────────────────────────────────────────
+  # Kafka 单机模式
+  # ─────────────────────────────────────────
+  kafka-single:
+    image: wurstmeister/kafka:latest
+    container_name: kafka-single
+    hostname: kafka-single
+    depends_on:
+      zookeeper-single:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-single:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-single:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: 'false'
+    volumes:
+      - "${HOME}/container-data/kafka/single:/kafka"
+    ports:
+      - "9092:9092"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - single
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # Kafka 集群模式 - Broker 1
+  # ─────────────────────────────────────────
+  kafka-broker-1:
+    image: wurstmeister/kafka:latest
+    container_name: kafka-broker-1
+    hostname: kafka-broker-1
+    depends_on:
+      zookeeper-1:
+        condition: service_healthy
+      zookeeper-2:
+        condition: service_healthy
+      zookeeper-3:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-1:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: 'false'
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: localhost
+    volumes:
+      - "${HOME}/container-data/kafka/broker-1:/kafka"
+    ports:
+      - "9093:9093"
+      - "19991:9999"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - cluster
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9093 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # Kafka 集群模式 - Broker 2
+  # ─────────────────────────────────────────
+  kafka-broker-2:
+    image: wurstmeister/kafka:latest
+    container_name: kafka-broker-2
+    hostname: kafka-broker-2
+    depends_on:
+      zookeeper-1:
+        condition: service_healthy
+      zookeeper-2:
+        condition: service_healthy
+      zookeeper-3:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-2:9094
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: 'false'
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: localhost
+    volumes:
+      - "${HOME}/container-data/kafka/broker-2:/kafka"
+    ports:
+      - "9094:9094"
+      - "19992:9999"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - cluster
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9094 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # Kafka 集群模式 - Broker 3
+  # ─────────────────────────────────────────
+  kafka-broker-3:
+    image: wurstmeister/kafka:latest
+    container_name: kafka-broker-3
+    hostname: kafka-broker-3
+    depends_on:
+      zookeeper-1:
+        condition: service_healthy
+      zookeeper-2:
+        condition: service_healthy
+      zookeeper-3:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-1:2181,zookeeper-2:2181,zookeeper-3:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9095
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-3:9095
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: 'false'
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: localhost
+    volumes:
+      - "${HOME}/container-data/kafka/broker-3:/kafka"
+    ports:
+      - "9095:9095"
+      - "19993:9999"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - cluster
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9095 --list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # Kafka UI
+  # ─────────────────────────────────────────
+  kafka-ui:
+    image: kafbat/kafka-ui:latest
+    container_name: kafka-ui
+    hostname: kafka-ui
+    depends_on:
+      zookeeper-single:
+        condition: service_healthy
+        required: false
+      zookeeper-1:
+        condition: service_healthy
+        required: false
+      zookeeper-2:
+        condition: service_healthy
+        required: false
+      zookeeper-3:
+        condition: service_healthy
+        required: false
+      kafka-single:
+        condition: service_healthy
+        required: false
+      kafka-broker-1:
+        condition: service_healthy
+        required: false
+      kafka-broker-2:
+        condition: service_healthy
+        required: false
+      kafka-broker-3:
+        condition: service_healthy
+        required: false
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: single
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-single:9092
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9999
+      KAFKA_CLUSTERS_1_NAME: cluster
+      KAFKA_CLUSTERS_1_BOOTSTRAPSERVERS: kafka-broker-1:9093,kafka-broker-2:9094,kafka-broker-3:9095
+      KAFKA_CLUSTERS_1_METRICS_PORT: 9999
+      AUTH_TYPE: "DISABLED"
+      MANAGEMENT_HEALTH_LDAP_ENABLED: 'false'
+    ports:
+      - "8083:8080"
+    restart: unless-stopped
+    networks:
+      - kafka-network
+    profiles:
+      - single
+      - cluster
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

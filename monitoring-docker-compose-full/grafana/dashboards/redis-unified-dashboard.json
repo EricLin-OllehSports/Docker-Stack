@@ -1,0 +1,148 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Redis Unified Monitoring - All Modes",
+    "tags": ["redis", "unified", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 30,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "redis_mode",
+          "type": "query",
+          "query": "label_values(redis_up, redis_mode)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        },
+        {
+          "name": "instance",
+          "type": "query", 
+          "query": "label_values(redis_up{redis_mode=~\"$redis_mode\"}, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": true
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Redis Instances Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "redis_up{redis_mode=~\"$redis_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{redis_mode}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Memory Usage by Mode",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes{redis_mode=~\"$redis_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{redis_mode}}) - Used",
+            "refId": "A"
+          },
+          {
+            "expr": "redis_memory_max_bytes{redis_mode=~\"$redis_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{redis_mode}}) - Max",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "yAxes": [{"unit": "bytes"}]
+      },
+      {
+        "id": 3,
+        "title": "Commands per Second",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(redis_commands_processed_total{redis_mode=~\"$redis_mode\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{instance}} ({{redis_mode}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yAxes": [{"unit": "ops"}]
+      },
+      {
+        "id": 4,
+        "title": "Connected Clients",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "redis_connected_clients{redis_mode=~\"$redis_mode\", instance=~\"$instance\"}",
+            "legendFormat": "{{instance}} ({{redis_mode}})",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Keyspace Hits vs Misses",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(redis_keyspace_hits_total{redis_mode=~\"$redis_mode\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{instance}} ({{redis_mode}}) - Hits",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(redis_keyspace_misses_total{redis_mode=~\"$redis_mode\", instance=~\"$instance\"}[5m])",
+            "legendFormat": "{{instance}} ({{redis_mode}}) - Misses",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Replication Status (Master-Slave/Sentinel)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "redis_master_last_io_seconds_ago{redis_mode=~\"replication|sentinel\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "Cluster Status (Cluster Mode)",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "redis_cluster_slots_assigned{redis_mode=\"cluster\", instance=~\"$instance\"}",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32}
+      }
+    ]
+  }
+}

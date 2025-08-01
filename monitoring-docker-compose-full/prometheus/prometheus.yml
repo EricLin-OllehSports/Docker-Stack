@@ -1,0 +1,201 @@
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'monitoring-stack'
+    replica: 'prometheus-1'
+
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node_exporter:9100']
+    scrape_interval: 15s
+    metrics_path: /metrics
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Database Exporters
+  - job_name: 'mysql-exporter'
+    static_configs:
+      - targets: ['mysql_exporter:9104']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis_exporter:9121']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  - job_name: 'mongodb-exporter'
+    static_configs:
+      - targets: ['mongodb_exporter:9216']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Message Queue Exporters
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: ['kafka_exporter:9308']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  - job_name: 'rabbitmq-exporter'
+    static_configs:
+      - targets: ['rabbitmq_exporter:9419']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Web Server Exporters
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['nginx_exporter:9113']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  - job_name: 'elasticsearch-exporter'
+    static_configs:
+      - targets: ['elasticsearch_exporter:9114']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # =========================================
+  # SPRING BOOT APPLICATIONS MONITORING
+  # =========================================
+  
+  # Spring Boot Microservices - Primary Applications
+  - job_name: 'spring-boot-microservices'
+    static_configs:
+      - targets: 
+          - 'user-service:8080'
+          - 'order-service:8080'
+          - 'payment-service:8080'
+          - 'inventory-service:8080'
+          - 'notification-service:8080'
+          - 'auth-service:8080'
+          - 'gateway-service:8080'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'microservice'
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: '${1}'
+    # Optional: Add basic auth if secured
+    # basic_auth:
+    #   username: 'actuator'
+    #   password: 'password'
+
+  # Spring Boot Microservices - Service Discovery
+  - job_name: 'microservices-discovery'
+    dns_sd_configs:
+      - names:
+          - 'microservices.local'
+        type: 'A'
+        port: 8080
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: dns_name
+      - source_labels: [__address__]
+        target_label: service_name
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - target_label: discovery_method
+        replacement: 'dns'
+
+  # Spring Boot Microservices - Docker Swarm
+  - job_name: 'microservices-swarm'
+    static_configs:
+      - targets: 
+          - 'tasks.user-service:8080'
+          - 'tasks.order-service:8080'
+          - 'tasks.payment-service:8080'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        regex: 'tasks\.([^:]+):.*'
+        replacement: '${1}'
+      - target_label: deployment_type
+        replacement: 'docker-swarm'
+
+  # Spring Boot Microservices - JVM Focus
+  - job_name: 'microservices-jvm'
+    static_configs:
+      - targets:
+          - 'user-service:8080'
+          - 'order-service:8080'
+          - 'payment-service:8080'
+    scrape_interval: 30s
+    metrics_path: /actuator/prometheus
+    metric_relabel_configs:
+      # Focus on JVM, process, and system metrics
+      - source_labels: [__name__]
+        regex: 'jvm_.*|process_.*|system_.*|tomcat_.*'
+        action: keep
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - target_label: metrics_focus
+        replacement: 'jvm'
+
+  # Spring Boot Microservices - Custom Metrics
+  - job_name: 'microservices-custom'
+    static_configs:
+      - targets:
+          - 'user-service:8080'
+          - 'order-service:8080'
+          - 'payment-service:8080'
+          - 'inventory-service:8080'
+    scrape_interval: 15s
+    metrics_path: /actuator/prometheus
+    metric_relabel_configs:
+      # Exclude JVM/system metrics, focus on application metrics
+      - source_labels: [__name__]
+        regex: 'jvm_.*|process_.*|system_.*|tomcat_.*|http_server_requests_.*'
+        action: drop
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        regex: '([^:]+):.*'
+        replacement: '${1}'
+      - target_label: metrics_type
+        replacement: 'business'
+
