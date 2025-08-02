@@ -1,0 +1,76 @@
+groups:
+  - name: trace_system_alerts
+    interval: 30s
+    rules:
+      # OpenTelemetry Collector 警報
+      - alert: OtelCollectorDown
+        expr: up{job="otel-collector"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: otel-collector
+        annotations:
+          summary: "OpenTelemetry Collector 服務已停止"
+          description: "OpenTelemetry Collector 已經停止運行超過 5 分鐘"
+
+      - alert: OtelCollectorHighMemoryUsage
+        expr: go_memstats_heap_alloc_bytes{job="otel-collector"} / 1024 / 1024 > 400
+        for: 5m
+        labels:
+          severity: warning
+          component: otel-collector
+        annotations:
+          summary: "OpenTelemetry Collector 記憶體使用量過高"
+          description: "OpenTelemetry Collector 記憶體使用量超過 400MB"
+
+      - alert: OtelCollectorDroppedSpans
+        expr: rate(otelcol_processor_dropped_spans_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: otel-collector
+        annotations:
+          summary: "OpenTelemetry Collector 丟棄了過多的 spans"
+          description: "過去 5 分鐘內每秒丟棄超過 100 個 spans"
+
+      # Jaeger 警報
+      - alert: JaegerDown
+        expr: up{job="jaeger"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: jaeger
+        annotations:
+          summary: "Jaeger 服務已停止"
+          description: "Jaeger 已經停止運行超過 5 分鐘"
+
+      - alert: JaegerHighSpanProcessingLatency
+        expr: histogram_quantile(0.95, rate(jaeger_collector_spans_processing_time_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: jaeger
+        annotations:
+          summary: "Jaeger span 處理延遲過高"
+          description: "95% 的 span 處理時間超過 1 秒"
+
+      # 通用追踪系統警報
+      - alert: HighTraceErrorRate
+        expr: rate(traces_service_graph_request_failed_total[5m]) / rate(traces_service_graph_request_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: traces
+        annotations:
+          summary: "追踪錯誤率過高"
+          description: "服務追踪錯誤率超過 5%"
+
+      - alert: NoTracesReceived
+        expr: rate(otelcol_receiver_accepted_spans_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+          component: traces
+        annotations:
+          summary: "沒有接收到追踪數據"
+          description: "過去 10 分鐘沒有接收到任何追踪數據"

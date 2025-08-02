@@ -1,0 +1,35 @@
+# Demo 應用程式配置 - 生成測試追踪數據
+receivers:
+  # 用於生成測試數據
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 1s
+
+exporters:
+  # 導出到主 OpenTelemetry Collector
+  otlp:
+    endpoint: otel-collector:4317
+    tls:
+      insecure: true
+
+  # 調試輸出
+  debug:
+    verbosity: detailed
+
+# 添加測試數據生成擴展
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp, debug]
